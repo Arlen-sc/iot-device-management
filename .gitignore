@@ -1,0 +1,20 @@
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Runtime data
+data/
+app.log
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test scripts (local only)
+test_save.mjs
