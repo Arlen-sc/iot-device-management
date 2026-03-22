@@ -43,16 +43,16 @@ public class FlowExecutor {
         }
 
         log.info("Starting flow execution from node: {}", startNode.getName());
-        context.addLog("================ 流程执行开始 ================");
-        context.addLog("流程ID: " + context.getFlowConfigId() + ", 流程名称: " + context.getFlowName());
-        context.addLog("事件ID: " + eventId);
-        context.addLog("【初始上下文数据】" + abbreviateLogData(context.getVariables().toString()));
+        context.addLog("SYSTEM", "================ 流程执行开始 ================", "START", startNode.getName(), null, null);
+        context.addLog("SYSTEM", "流程ID: " + context.getFlowConfigId() + ", 流程名称: " + context.getFlowName(), null, null, null, null);
+        context.addLog("SYSTEM", "事件ID: " + eventId, null, null, null, null);
+        context.addLog("SYSTEM", "【初始上下文数据】", null, null, abbreviateLogData(context.getVariables().toString()), null);
 
         executeNode(startNode, flow, context);
 
-        context.addLog("================ 流程执行结束 ================");
-        context.addLog("最终状态: " + (context.isCompleted() ? "成功(Completed)" : "未完成(Incomplete)"));
-        context.addLog("【最终上下文数据】" + abbreviateLogData(context.getVariables().toString()));
+        context.addLog("SYSTEM", "================ 流程执行结束 ================", "END", null, null, null);
+        context.addLog("SYSTEM", "最终状态: " + (context.isCompleted() ? "成功(Completed)" : "未完成(Incomplete)"), null, null, null, null);
+        context.addLog("SYSTEM", "【最终上下文数据】", null, null, abbreviateLogData(context.getVariables().toString()), null);
         log.info("Flow execution finished, completed: {}", context.isCompleted());
     }
 
@@ -77,35 +77,38 @@ public class FlowExecutor {
         }
 
         log.info("Executing node: {} (type: {})", node.getName(), nodeType);
-        context.addLog(String.format("【节点执行开始】节点: %s (%s)", node.getName(), nodeType), nodeType, node.getName());
-        context.addLog("【节点输入数据】" + abbreviateLogData(context.getVariables().toString()), nodeType, node.getName());
+        context.addLog("INFO", "【节点执行开始】", nodeType, node.getName(), null, null);
+        context.addLog("INFO", "【节点输入数据】", nodeType, node.getName(), abbreviateLogData(context.getVariables().toString()), null);
 
         NodeResult result;
+        long startTime = System.currentTimeMillis();
         try {
             result = handler.execute(node, context);
-            context.addLog(String.format("【节点执行成功】节点: %s", node.getName()), nodeType, node.getName());
+            long duration = System.currentTimeMillis() - startTime;
+            context.addLog("SUCCESS", "【节点执行成功】", nodeType, node.getName(), null, duration);
         } catch (Exception e) {
+            long duration = System.currentTimeMillis() - startTime;
             log.error("Unexpected error executing node: {}", node.getName(), e);
-            context.addLog(String.format("【节点执行异常】节点: %s, 错误: %s", node.getName(), e.getMessage()), nodeType, node.getName());
+            context.addLog("ERROR", "【节点执行异常】" + e.getMessage(), nodeType, node.getName(), null, duration);
             return;
         }
 
         if (result == null) {
-            context.addLog(String.format("【节点执行警告】节点 %s 返回了空结果", node.getName()), nodeType, node.getName());
+            context.addLog("WARN", "【节点执行警告】返回了空结果", nodeType, node.getName(), null, null);
             return;
         }
 
         if (!result.isSuccess()) {
             log.warn("Node {} failed: {}", node.getName(), result.getErrorMessage());
-            context.addLog(String.format("【节点执行失败】节点: %s, 错误信息: %s", node.getName(), result.getErrorMessage()), nodeType, node.getName());
+            context.addLog("ERROR", "【节点执行失败】" + result.getErrorMessage(), nodeType, node.getName(), null, null);
             saveErrorToDb(node, nodeType, context, result.getErrorMessage());
             return;
         } else {
              if (result.getResultData() != null) {
                  context.setVariable("node_" + node.getId() + "_result", result.getResultData());
-                 context.addLog("【节点执行结果数据】" + abbreviateLogData(result.getResultData().toString()), nodeType, node.getName());
+                 context.addLog("INFO", "【节点执行结果数据】", nodeType, node.getName(), abbreviateLogData(result.getResultData().toString()), null);
              }
-             context.addLog("【节点输出后上下文】" + abbreviateLogData(context.getVariables().toString()), nodeType, node.getName());
+             context.addLog("INFO", "【节点输出后上下文】", nodeType, node.getName(), abbreviateLogData(context.getVariables().toString()), null);
         }
 
         if (context.isCompleted()) {
@@ -121,19 +124,19 @@ public class FlowExecutor {
         }
 
         if (nextNodeIds == null || nextNodeIds.isEmpty()) {
-            context.addLog("No more nodes to execute after: " + node.getName());
+            context.addLog("WARN", "没有后续节点可以执行: " + node.getName(), nodeType, node.getName(), null, null);
             return;
         }
 
         if (nextNodeIds.size() == 1) {
             // Serial execution for single next node
             FlowNode nextNode = flow.findNodeById(nextNodeIds.get(0));
-            context.addLog(String.format("【流程流转】节点 %s -> 节点 %s", node.getName(), nextNode != null ? nextNode.getName() : "null"));
+            context.addLog("SYSTEM", String.format("【流程流转】节点 %s -> 节点 %s", node.getName(), nextNode != null ? nextNode.getName() : "null"), nodeType, node.getName(), null, null);
             executeNode(nextNode, flow, context);
         } else {
             // Parallel execution for multiple next nodes
             log.info("Parallel execution of {} branches from node: {}", nextNodeIds.size(), node.getName());
-            context.addLog(String.format("【流程流转】节点 %s 分支执行, 目标节点数: %d", node.getName(), nextNodeIds.size()));
+            context.addLog("SYSTEM", String.format("【流程流转】节点 %s 分支执行, 目标节点数: %d", node.getName(), nextNodeIds.size()), nodeType, node.getName(), null, null);
 
             CompletableFuture<?>[] futures = nextNodeIds.stream()
                     .map(nodeId -> {
@@ -146,7 +149,7 @@ public class FlowExecutor {
                 CompletableFuture.allOf(futures).join();
             } catch (Exception e) {
                 log.error("Error in parallel execution from node: {}", node.getName(), e);
-                context.addLog("Error in parallel execution: " + e.getMessage());
+                context.addLog("ERROR", "分支并行执行异常: " + e.getMessage(), nodeType, node.getName(), null, null);
             }
         }
     }

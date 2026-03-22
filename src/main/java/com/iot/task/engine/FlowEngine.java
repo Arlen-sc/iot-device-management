@@ -58,7 +58,7 @@ public class FlowEngine {
                 }
             }
 
-            context.addLog("Flow config loaded: " + config.getName());
+            context.addLog("INFO", "Flow config loaded: " + config.getName(), "SYSTEM", "Engine", null, null);
             flowExecutor.execute(flowDefinition, context);
 
             config.setLastExecutionStatus(context.isCompleted() ? "SUCCESS" : "FAILED");
@@ -207,7 +207,7 @@ public class FlowEngine {
                     }
                 }
 
-                context.addLog("[迭代 #" + runner.iterationCount + "] Flow config loaded: " + config.getName());
+                context.addLog("INFO", "[迭代 #" + runner.iterationCount + "] Flow config loaded: " + config.getName(), "SYSTEM", "Engine", null, null);
                 flowExecutor.execute(flowDefinition, context);
 
                 // Check if dedup filtered (not a real failure)
@@ -219,7 +219,7 @@ public class FlowEngine {
                 }
 
                 // Keep recent logs (last iteration only, capped)
-                List<String> logs = context.getExecutionLog();
+                List<ExecutionLogEntry> logs = context.getExecutionLog();
                 runner.recentLogs = logs.size() > 20 ? logs.subList(logs.size() - 20, logs.size()) : logs;
 
                 // Update DB status periodically (every 10 iterations)
@@ -264,7 +264,7 @@ public class FlowEngine {
         volatile int iterationCount = 0;
         volatile LocalDateTime lastIterationTime;
         volatile String lastStatus = "STARTING";
-        volatile List<String> recentLogs = List.of();
+        volatile List<ExecutionLogEntry> recentLogs = List.of();
         Thread thread;
 
         ContinuousRunner(Long configId, String name, int intervalMs) {

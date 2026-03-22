@@ -18,7 +18,7 @@ public class FlowExecutionContext {
     private String flowName;
     private String eventId;
     private boolean completed;
-    private List<String> executionLog = new ArrayList<>();
+    private List<ExecutionLogEntry> executionLog = new ArrayList<>();
 
     /** Guards against infinite loops (e.g. TCP RECEIVE + CONDITION retry). */
     private final AtomicInteger executionStepCount = new AtomicInteger(0);
@@ -39,14 +39,23 @@ public class FlowExecutionContext {
     }
 
     public void addLog(String message) {
-        addLog(message, "SYSTEM", "System");
+        addLog("SYSTEM", message, "SYSTEM", "System", null, null);
     }
 
     public void addLog(String message, String actionType, String nodeName) {
-        String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
-        // We encode actionType and nodeName in the log string for the frontend to parse if needed
-        // format: [timestamp] [actionType] [nodeName] message
-        executionLog.add(String.format("[%s] [%s] [%s] %s", timestamp, actionType != null ? actionType : "-", nodeName != null ? nodeName : "-", message));
+        addLog("INFO", message, actionType, nodeName, null, null);
+    }
+
+    public void addLog(String level, String message, String actionType, String nodeName, Object data, Long durationMs) {
+        ExecutionLogEntry entry = new ExecutionLogEntry();
+        entry.setTimestamp(java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS")));
+        entry.setLevel(level);
+        entry.setMessage(message);
+        entry.setActionType(actionType != null ? actionType : "-");
+        entry.setNodeName(nodeName != null ? nodeName : "-");
+        entry.setData(data);
+        entry.setDurationMs(durationMs);
+        executionLog.add(entry);
     }
 
     public Device getDevice() {
