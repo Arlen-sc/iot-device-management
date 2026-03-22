@@ -82,7 +82,7 @@ class CameraScenarioFlowIntegrationTest {
         relayClient.get(60, TimeUnit.SECONDS);
         pool.shutdownNow();
 
-        Assertions.assertTrue(ctx.isCompleted(), "流程应到达 END；日志: " + String.join("\n", ctx.getExecutionLog()));
+        Assertions.assertTrue(ctx.isCompleted(), "流程应到达 END；日志: " + String.join("\n", ctx.getExecutionLog().stream().map(e -> e.getMessage()).collect(java.util.stream.Collectors.toList())));
         @SuppressWarnings("unchecked")
         var parsed = (java.util.Map<String, Object>) ctx.getVariables().get("parsedResult");
         Assertions.assertNotNull(parsed);

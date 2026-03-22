@@ -30,19 +30,25 @@ const DebugConsole = {
         const confirmBtn = document.getElementById('modal-confirm-btn');
         if (confirmBtn) confirmBtn.textContent = '关闭';
 
-        document.getElementById('btn-run-debug').addEventListener('click', async function() {
-            var btn = this;
-            var logsEl = document.getElementById('debug-logs');
-            var varsEl = document.getElementById('debug-vars');
+        const runBtn = document.getElementById('btn-run-debug');
+        if (runBtn) {
+            // Remove old listeners to prevent multiple bindings if show is called multiple times
+            const newRunBtn = runBtn.cloneNode(true);
+            runBtn.parentNode.replaceChild(newRunBtn, runBtn);
             
-            btn.disabled = true;
-            btn.textContent = '运行中...';
-            btn.style.background = '#d9d9d9';
-            logsEl.innerHTML = '<div style="color:#1890ff;">[SYSTEM] 开始执行流程...</div>';
-            varsEl.innerHTML = '<div style="color:#999;">运行中...</div>';
+            newRunBtn.addEventListener('click', async function() {
+                var btn = this;
+                var logsEl = document.getElementById('debug-logs');
+                var varsEl = document.getElementById('debug-vars');
+                
+                btn.disabled = true;
+                btn.textContent = '运行中...';
+                btn.style.background = '#d9d9d9';
+                logsEl.innerHTML = '<div style="color:#1890ff;">[SYSTEM] 开始执行流程...</div>';
+                varsEl.innerHTML = '<div style="color:#999;">运行中...</div>';
 
-            try {
-                const result = await API.post('/task-flow-configs/' + taskId + '/execute');
+                try {
+                    const result = await API.post('/task-flow-configs/' + taskId + '/execute');
                 
                 // Render Logs
                 var logs = result.logs || [];
@@ -119,17 +125,18 @@ const DebugConsole = {
                     varsEl.innerHTML = varsHtml;
                 }
 
-            } catch (err) {
-                logsEl.innerHTML += '<div style="color:#ff6b6b;margin-top:10px;">[SYSTEM] 执行异常: ' + App.escapeHtml(err.message) + '</div>';
-                varsEl.innerHTML = '<div style="color:#ff4d4f;">执行失败</div>';
-            } finally {
-                btn.disabled = false;
-                btn.textContent = '开始运行';
-                btn.style.background = '#52c41a';
-                if (window.Pages && window.Pages.tasks && typeof window.Pages.tasks.loadData === 'function') {
-                    window.Pages.tasks.loadData();
+                } catch (err) {
+                    logsEl.innerHTML += '<div style="color:#ff6b6b;margin-top:10px;">[SYSTEM] 执行异常: ' + App.escapeHtml(err.message) + '</div>';
+                    varsEl.innerHTML = '<div style="color:#ff4d4f;">执行失败</div>';
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = '开始运行';
+                    btn.style.background = '#52c41a';
+                    if (window.Pages && window.Pages.tasks && typeof window.Pages.tasks.loadData === 'function') {
+                        window.Pages.tasks.loadData();
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 };

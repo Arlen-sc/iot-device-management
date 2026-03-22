@@ -233,7 +233,13 @@ public class FlowEngine {
                 log.error("Continuous flow iteration #{} failed for {}: {}",
                         runner.iterationCount, runner.name, e.getMessage());
                 runner.lastStatus = "ERROR: " + e.getMessage();
-                runner.recentLogs = List.of("[ERROR] " + e.getMessage());
+                ExecutionLogEntry errLog = new ExecutionLogEntry();
+                errLog.setTimestamp(java.time.LocalDateTime.now().toString());
+                errLog.setLevel("ERROR");
+                errLog.setMessage("[ERROR] " + e.getMessage());
+                errLog.setActionType("SYSTEM");
+                errLog.setNodeName("Engine");
+                runner.recentLogs = List.of(errLog);
             }
 
             // Sleep between iterations

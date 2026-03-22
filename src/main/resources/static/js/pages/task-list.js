@@ -110,7 +110,12 @@ Pages.tasks = {
     },
 
     bindRowEvents(tbody) {
-        tbody.addEventListener('click', async (e) => {
+        // Remove previous event listener if exists to prevent multiple triggers
+        if (this._rowClickHandler) {
+            tbody.removeEventListener('click', this._rowClickHandler);
+        }
+
+        this._rowClickHandler = async (e) => {
             const btn = e.target.closest('button');
             if (!btn) return;
             const id = btn.dataset.id;
@@ -125,11 +130,10 @@ Pages.tasks = {
                     App.showToast('解析任务数据失败', 'error');
                 }
             } else if (btn.classList.contains('btn-debug')) {
-                try {
-                    const result = await API.post('/task-flow-configs/' + id + '/execute');
-                    this.showExecResult(result);
-                } catch (err) {
-                    App.showToast('执行失败: ' + err.message, 'error');
+                if (window.DebugConsole) {
+                    window.DebugConsole.show(id);
+                } else {
+                    App.showToast('调试模块未加载', 'error');
                 }
             } else if (btn.classList.contains('btn-logs')) {
                 this.showLogsInterface(id);
@@ -161,7 +165,9 @@ Pages.tasks = {
                     }
                 });
             }
-        });
+        };
+
+        tbody.addEventListener('click', this._rowClickHandler);
     },
 
     showForm(task) {
@@ -380,23 +386,38 @@ Pages.tasks = {
                 });
             });
 
-            // Bind events for refresh and clear
-            document.getElementById('log-refresh-btn').addEventListener('click', () => {
-                App.hideModal();
-                this.showLogsInterface(id);
-            });
-            document.getElementById('log-clear-btn').addEventListener('click', () => {
-                App.confirm('确定要清空该任务的所有日志吗？', async () => {
-                    try {
-                        await API.del('/flow-logs/' + id);
-                        App.showToast('日志已清空', 'success');
-                        App.hideModal();
-                        this.showLogsInterface(id);
-                    } catch (e) {
-                        App.showToast('清空失败: ' + e.message, 'error');
-                    }
-                });
-            });
+            if (!this._logRefreshHandler) {
+                this._logRefreshHandler = () => {
+                    App.hideModal();
+                    this.showLogsInterface(id);
+                };
+            }
+            if (!this._logClearHandler) {
+                this._logClearHandler = () => {
+                    App.confirm('确定要清空该任务的所有日志吗？', async () => {
+                        try {
+                            await API.del('/flow-logs/' + id);
+                            App.showToast('日志已清空', 'success');
+                            App.hideModal();
+                            this.showLogsInterface(id);
+                        } catch (e) {
+                            App.showToast('清空失败: ' + e.message, 'error');
+                        }
+                    });
+                };
+            }
+
+            const refreshBtn = document.getElementById('log-refresh-btn');
+            const clearBtn = document.getElementById('log-clear-btn');
+            
+            if (refreshBtn) {
+                refreshBtn.removeEventListener('click', this._logRefreshHandler);
+                refreshBtn.addEventListener('click', this._logRefreshHandler);
+            }
+            if (clearBtn) {
+                clearBtn.removeEventListener('click', this._logClearHandler);
+                clearBtn.addEventListener('click', this._logClearHandler);
+            }
             
         } catch (err) {
             App.showToast('加载日志失败: ' + err.message, 'error');
