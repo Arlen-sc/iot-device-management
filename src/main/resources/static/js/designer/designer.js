@@ -197,8 +197,8 @@
                 autoResize: true,
                 background: { color: '#fafafa' },
                 grid: { visible: true, size: 15, type: 'dot' },
-                panning: { enabled: true, modifiers: [] },
-                mousewheel: { enabled: true, modifiers: [] },
+                panning: { enabled: true, modifiers: [], eventTypes: ['leftMouseDown'] },
+                mousewheel: { enabled: true, modifiers: ['ctrl', 'meta'] },
                 connecting: {
                     router: 'manhattan',
                     connector: { name: 'rounded', args: { radius: 8 } },
@@ -410,13 +410,13 @@
             graph.on('node:click', function (args) {
                 self.selectedEdge = null;
                 self.selectedNode = args.node;
-                self.renderNodeConfig(args.node);
+                self.showFormModal(args.node);
             });
 
             graph.on('edge:click', function (args) {
                 self.selectedNode = null;
                 self.selectedEdge = args.edge;
-                self.renderEdgeConfig(args.edge);
+                self.showEdgeModal(args.edge);
             });
 
             graph.on('blank:click', function () {
@@ -464,6 +464,36 @@
                 var newExec = executeBtn.cloneNode(true);
                 executeBtn.parentNode.replaceChild(newExec, executeBtn);
                 newExec.addEventListener('click', function () { self.handleExecute(); });
+            }
+
+            // Toolbar interactions (Zoom & Center)
+            var zoomInBtn = document.getElementById('designer-zoom-in');
+            if (zoomInBtn) {
+                zoomInBtn.addEventListener('click', function() {
+                    if (self.graph) {
+                        const zoom = self.graph.zoom();
+                        self.graph.zoomTo(zoom + 0.1, { maxScale: 2 });
+                    }
+                });
+            }
+
+            var zoomOutBtn = document.getElementById('designer-zoom-out');
+            if (zoomOutBtn) {
+                zoomOutBtn.addEventListener('click', function() {
+                    if (self.graph) {
+                        const zoom = self.graph.zoom();
+                        self.graph.zoomTo(zoom - 0.1, { minScale: 0.5 });
+                    }
+                });
+            }
+
+            var centerBtn = document.getElementById('designer-center');
+            if (centerBtn) {
+                centerBtn.addEventListener('click', function() {
+                    if (self.graph) {
+                        self.graph.centerContent();
+                    }
+                });
             }
         },
 
@@ -725,9 +755,78 @@
             return errors;
         },
 
-        // =============================================================
-        //  Config panel  -  hint (no selection)
-        // =============================================================
+        // Custom form modal using App.showModal
+        showFormModal(node) {
+            var typeLabels = {
+                START: '开始节点', END: '结束节点', CONDITION: '条件分支', DELAY: '延迟节点',
+                SCRIPT: '脚本处理', HTTP_REQUEST: 'HTTP 请求',
+                PLC_READ: 'PLC 读取', PLC_WRITE: 'PLC 写入',
+                TCP_LISTEN: 'TCP 监听', TCP_SEND: 'TCP 发送',
+                DEVICE_CONTROL: '设备控制', DEVICE_DATA: '设备数据',
+                LOG: '日志记录', DEDUP_FILTER: '去重过滤',
+                DB_OPERATION: '数据库操作'
+            };
+
+            var html = '<div id="designer-form-container" style="padding: 10px;"></div>';
+
+            var modalWidth = '500px';
+            if (node.type === 'SCRIPT') modalWidth = '800px';
+            else if (node.type === 'CONDITION') modalWidth = '600px';
+
+            App.showModal('节点配置 - ' + (typeLabels[node.type] || node.type), html, () => {
+                var container = document.getElementById('designer-form-container');
+                if (container) {
+                    // Triger the same save action by closing
+                    this.renderGraph();
+                    App.hideModal();
+                }
+            }, { width: modalWidth, fullscreenable: true });
+
+            // Render form into container
+            setTimeout(() => {
+                var container = document.getElementById('designer-form-container');
+                if (container) {
+                    // Reuse existing render method by temporarily overriding container id
+                    var originalRender = this.renderNodeConfig;
+                    var configContent = document.getElementById('config-content');
+                    var origId = configContent ? configContent.id : null;
+                    
+                    if (configContent) configContent.id = 'config-content-hidden';
+                    container.id = 'config-content';
+                    
+                    this.renderNodeConfig(node);
+                    
+                    // restore ids
+                    container.id = 'designer-form-container';
+                    if (configContent) configContent.id = origId;
+                }
+            }, 50);
+        },
+        showEdgeModal(edge) {
+            var html = '<div id="designer-edge-container" style="padding: 10px;"></div>';
+
+            App.showModal('连线配置', html, () => {
+                this.renderGraph();
+                App.hideModal();
+            }, { width: '400px', fullscreenable: true });
+
+            setTimeout(() => {
+                var container = document.getElementById('designer-edge-container');
+                if (container) {
+                    var configContent = document.getElementById('config-content');
+                    var origId = configContent ? configContent.id : null;
+                    
+                    if (configContent) configContent.id = 'config-content-hidden';
+                    container.id = 'config-content';
+                    
+                    this.renderEdgeConfig(edge);
+                    
+                    container.id = 'designer-edge-container';
+                    if (configContent) configContent.id = origId;
+                }
+            }, 50);
+        },
+        
         renderConfigHint() {
             var el = document.getElementById('config-content');
             if (!el) return;

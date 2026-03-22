@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  iot-app:
+    build: .
+    container_name: iot-device-management
+    ports:
+      - "18082:18082"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+    depends_on:
+      - redis
+    networks:
+      - iot-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: iot-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - iot-network
+
+volumes:
+  redis-data:
+
+networks:
+  iot-network:
+    driver: bridge

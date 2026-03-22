@@ -112,43 +112,7 @@ public class DataLoadNodeHandler implements NodeHandler {
     }
 
     private Connection getConnection(Map<String, Object> config, String dbMode) throws Exception {
-        if ("REMOTE".equalsIgnoreCase(dbMode)) {
-            // Reusing application's main DataSource instead of requiring manual connection configs
-            log.info("DATA_LOAD: Using system default data source for REMOTE mode");
-            return dataSource.getConnection();
-        } else {
-            // Local SQLite for isolated/embedded storage if needed
-            return dataSource.getConnection();
-        }
-    }
-
-    private String resolveVariables(String template, FlowExecutionContext context) {
-        if (template == null) return null;
-        StringBuilder sb = new StringBuilder();
-        int i = 0;
-        while (i < template.length()) {
-            if (i + 1 < template.length() && template.charAt(i) == '$' && template.charAt(i + 1) == '{') {
-                int end = template.indexOf('}', i + 2);
-                if (end > 0) {
-                    String varPath = template.substring(i + 2, end);
-                    Object val = VariablePathUtils.getValue(context.getVariables(), varPath);
-                    if (val instanceof List || val instanceof Map) {
-                        try {
-                            sb.append(objectMapper.writeValueAsString(val));
-                        } catch (Exception e) {
-                            sb.append(val.toString());
-                        }
-                    } else {
-                        sb.append(val != null ? val.toString() : "");
-                    }
-                    i = end + 1;
-                    continue;
-                }
-            }
-            sb.append(template.charAt(i));
-            i++;
-        }
-        return sb.toString();
+        return dataSource.getConnection();
     }
 
     private List<Map<String, Object>> resultSetToList(ResultSet rs) throws SQLException {

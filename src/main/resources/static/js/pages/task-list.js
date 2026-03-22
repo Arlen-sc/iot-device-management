@@ -198,7 +198,7 @@ Pages.tasks = {
             } catch (err) {
                 App.showToast('操作失败: ' + err.message, 'error');
             }
-        });
+        }, { fullscreenable: true });
 
         // Toggle cron expression field visibility
         const triggerSelect = document.getElementById('form-triggerType');
@@ -255,85 +255,130 @@ Pages.tasks = {
         try {
             const logs = await API.get('/flow-logs/' + id + '?limit=100');
             
-            var html = '<div style="margin-bottom:16px;">';
-        
-        // Navigation header inside modal
-        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e8e8e8;">' +
-            '<div>' +
-            '<button id="log-refresh-btn" style="padding:6px 16px;background:#fff;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;font-size:13px;margin-right:8px;">刷新</button>' +
-            '<button id="log-clear-btn" style="padding:6px 16px;background:#fff;border:1px solid #ff4d4f;color:#ff4d4f;border-radius:4px;cursor:pointer;font-size:13px;">清空</button>' +
-            '</div>' +
-            '<div style="font-size:13px;color:#666;">显示最近 100 条记录</div>' +
-            '</div>';
-
-        if (!logs || logs.length === 0) {
-            html += '<div style="color:#999;text-align:center;padding:40px;background:#fafafa;border-radius:4px;">暂无日志记录</div>';
-        } else {
-                html += '<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;">';
-                html += '<thead><tr style="background:#fafafa;">';
-                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:160px;">时间</th>';
-                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:60px;">级别</th>';
-                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:120px;">节点</th>';
-                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;">消息与数据</th>';
-                html += '</tr></thead><tbody>';
-                
-                logs.forEach(log => {
-                    let color = '#333';
-                    if (log.level === 'ERROR' || (log.message && log.message.indexOf('【节点执行失败】') >= 0) || (log.message && log.message.indexOf('【节点执行异常】') >= 0)) color = '#ff4d4f';
-                    if (log.level === 'WARN' || (log.message && log.message.indexOf('【节点执行警告】') >= 0)) color = '#faad14';
-                    if (log.message && log.message.indexOf('================') >= 0) color = '#1890ff';
-                    if (log.message && log.message.indexOf('【流程流转】') >= 0) color = '#b37feb';
-                    if (log.message && log.message.indexOf('【节点执行成功】') >= 0) color = '#52c41a';
+            // 按eventId分组日志
+            const events = {};
+            logs.forEach(log => {
+                const eventId = log.eventId || 'unknown';
+                if (!events[eventId]) {
+                    events[eventId] = {
+                        id: eventId,
+                        date: log.createdAt,
+                        logs: []
+                    };
+                }
+                events[eventId].logs.push(log);
+            });
+            
+            // 按日期排序事件
+            const eventList = Object.values(events).sort((a, b) => {
+                return new Date(b.date) - new Date(a.date);
+            });
+            
+            var html = '<div style="display:flex;height:100%;min-height:500px;">';
+            
+            // Left side event list
+            html += '<div style="width:250px;border-right:1px solid #e8e8e8;background:#fafafa;display:flex;flex-direction:column;">';
+            html += '<div style="padding:12px;font-size:14px;font-weight:600;border-bottom:1px solid #e8e8e8;flex-shrink:0;">执行事件</div>';
+            html += '<div style="flex:1;overflow-y:auto;" id="log-event-list">';
+            
+            if (eventList.length === 0) {
+                html += '<div style="padding:40px 12px;text-align:center;color:#999;">暂无事件记录</div>';
+            } else {
+                eventList.forEach((event, index) => {
+                    const date = new Date(event.date);
+                    const formattedDate = date.toLocaleString('zh-CN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
                     
-                    let dataHtml = '';
-                    if (log.dataJson && log.dataJson !== 'null') {
-                        try {
-                            const parsed = JSON.parse(log.dataJson);
-                            dataHtml = '<div style="margin-top:6px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:12px;overflow-x:auto;color:#666;">' + 
-                                       App.escapeHtml(JSON.stringify(parsed, null, 2)) + 
-                                       '</div>';
-                        } catch(e) {
-                            dataHtml = '<div style="margin-top:6px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:12px;overflow-x:auto;color:#666;">' + 
-                                       App.escapeHtml(log.dataJson) + 
-                                       '</div>';
-                        }
-                    }
-
-                    html += '<tr style="border-bottom:1px solid #f0f0f0;color:' + color + '">';
-                    html += '<td style="padding:10px 8px;vertical-align:top;">' + App.escapeHtml(log.createdAt ? log.createdAt.replace('T', ' ') : '') + '</td>';
-                    
-                    let levelBadge = log.level;
-                    if (log.level === 'ERROR') levelBadge = '<span style="background:#fff2f0;color:#ff4d4f;padding:2px 6px;border-radius:4px;border:1px solid #ffccc7;font-size:12px;">ERROR</span>';
-                    else if (log.level === 'WARN') levelBadge = '<span style="background:#fffbe6;color:#fa8c16;padding:2px 6px;border-radius:4px;border:1px solid #ffe8cc;font-size:12px;">WARN</span>';
-                    else if (log.level === 'INFO') levelBadge = '<span style="background:#e6f7ff;color:#1890ff;padding:2px 6px;border-radius:4px;border:1px solid #91d5ff;font-size:12px;">INFO</span>';
-                    
-                    html += '<td style="padding:10px 8px;vertical-align:top;">' + levelBadge + '</td>';
-                    html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + App.escapeHtml(log.nodeName || log.nodeId || '-') + '</td>';
-                    html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + 
-                            '<div style="line-height:1.5;">' + App.escapeHtml(log.message || '') + '</div>' + 
-                            dataHtml + 
-                            '</td>';
-                    html += '</tr>';
+                    html += '<div class="event-item" data-event-id="' + event.id + '" style="padding:12px;border-bottom:1px solid #f0f0f0;cursor:pointer;' + (index === 0 ? 'background:#e6f7ff;' : '') + '">' +
+                        '<div style="font-size:13px;font-weight:500;margin-bottom:4px;">事件 ' + (eventList.length - index) + '</div>' +
+                        '<div style="font-size:12px;color:#666;">' + formattedDate + '</div>' +
+                        '<div style="font-size:11px;color:#999;margin-top:2px;">包含 ' + event.logs.length + ' 条日志</div>' +
+                        '</div>';
                 });
-                html += '</tbody></table>';
             }
+            html += '</div></div>';
+            
+            // 右侧日志详情
+            html += '<div style="flex:1;display:flex;flex-direction:column;overflow:hidden;">';
+            html += '<div style="padding:12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e8e8e8;flex-shrink:0;">' +
+                '<div style="font-size:14px;font-weight:600;">流程日志</div>' +
+                '<div>' +
+                '<button id="log-refresh-btn" style="padding:6px 16px;background:#fff;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;font-size:13px;margin-right:8px;">刷新</button>' +
+                '<button id="log-clear-btn" style="padding:6px 16px;background:#fff;border:1px solid #ff4d4f;color:#ff4d4f;border-radius:4px;cursor:pointer;font-size:13px;">清空</button>' +
+                '</div>' +
+                '</div>';
+            
+            // 默认显示第一个事件的日志
+            if (eventList.length > 0) {
+                html += this.generateLogTable(eventList[0].logs);
+            } else {
+                html += '<div style="padding:40px;text-align:center;color:#999;">暂无日志记录</div>';
+            }
+            
+            html += '</div>';
             html += '</div>';
 
+            // Update modal settings
             App.showModal('查看日志', html, () => {
                 App.hideModal();
-            });
+            }, { width: '1000px', maxWidth: '95vw', fullscreenable: true });
+            
+            // Adjust body style for flex layout
+            const modalBody = document.querySelector('#modal-overlay .modal-body');
+            if (modalBody) {
+                modalBody.style.padding = '20px';
+                modalBody.style.display = 'flex';
+                modalBody.style.flexDirection = 'column';
+                modalBody.style.height = '100%';
+            }
+
+            // Increase modal width for better log viewing
+            const modalEl = document.querySelector('#modal-overlay .modal');
+            if (modalEl) {
+                modalEl.style.width = '1000px';
+                modalEl.style.maxWidth = '95vw';
+                modalEl.style.height = '80vh';
+            }
+
             // Hide the cancel button since it's just a view
             const cancelBtn = document.getElementById('modal-cancel-btn');
             if (cancelBtn) cancelBtn.style.display = 'none';
             const confirmBtn = document.getElementById('modal-confirm-btn');
             if (confirmBtn) confirmBtn.textContent = '关闭';
-
-            // Increase modal width for better log viewing
-            const modalEl = document.querySelector('#modal-overlay .modal');
-            if (modalEl) {
-                modalEl.style.width = '900px';
-                modalEl.style.maxWidth = '95vw';
-            }
+ 
+            // Bind events for event items
+            document.querySelectorAll('.event-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    // 移除所有事件项的选中状态
+                    document.querySelectorAll('.event-item').forEach(i => {
+                        i.style.background = '';
+                    });
+                    // 设置当前事件项为选中状态
+                    item.style.background = '#e6f7ff';
+                    
+                    // 获取当前事件的日志
+                    const eventId = item.dataset.eventId;
+                    const event = events[eventId];
+                    
+                    // 更新右侧日志内容
+                    const logContainer = document.querySelector('#modal-overlay .modal .modal-body > div > div:nth-child(2)');
+                    if (logContainer) {
+                        // 保留顶部的标题和按钮
+                        const header = logContainer.querySelector('div:first-child');
+                        if (header) {
+                            logContainer.innerHTML = '';
+                            logContainer.appendChild(header);
+                            logContainer.innerHTML += this.generateLogTable(event.logs);
+                        }
+                    }
+                });
+            });
 
             // Bind events for refresh and clear
             document.getElementById('log-refresh-btn').addEventListener('click', () => {
@@ -356,6 +401,63 @@ Pages.tasks = {
         } catch (err) {
             App.showToast('加载日志失败: ' + err.message, 'error');
         }
+    },
+    
+    generateLogTable(logs) {
+        let html = '';
+        if (!logs || logs.length === 0) {
+            html += '<div style="color:#999;text-align:center;padding:40px;background:#fafafa;border-radius:4px;margin:12px;flex:1;">暂无日志记录</div>';
+        } else {
+            html += '<div style="flex:1;overflow-y:auto;border:1px solid #e8e8e8;border-radius:4px;min-height:0;">';
+            html += '<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;word-wrap:break-word;">';
+            html += '<thead style="position:sticky;top:0;z-index:1;background:#fafafa;box-shadow:0 1px 2px rgba(0,0,0,0.05);"><tr style="background:#fafafa;">';
+            html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:160px;">时间</th>';
+            html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:60px;">级别</th>';
+            html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:120px;">节点</th>';
+            html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;">消息与数据</th>';
+            html += '</tr></thead><tbody>';
+            
+            logs.forEach(log => {
+                let color = '#333';
+                if (log.level === 'ERROR' || (log.message && log.message.indexOf('【节点执行失败】') >= 0) || (log.message && log.message.indexOf('【节点执行异常】') >= 0)) color = '#ff4d4f';
+                if (log.level === 'WARN' || (log.message && log.message.indexOf('【节点执行警告】') >= 0)) color = '#faad14';
+                if (log.message && log.message.indexOf('================') >= 0) color = '#1890ff';
+                if (log.message && log.message.indexOf('【流程流转】') >= 0) color = '#b37feb';
+                if (log.message && log.message.indexOf('【节点执行成功】') >= 0) color = '#52c41a';
+                
+                let dataHtml = '';
+                if (log.dataJson && log.dataJson !== 'null') {
+                    try {
+                        const parsed = JSON.parse(log.dataJson);
+                        dataHtml = '<div style="margin-top:6px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:12px;overflow-x:auto;color:#666;">' + 
+                                   App.escapeHtml(JSON.stringify(parsed, null, 2)) + 
+                                   '</div>';
+                    } catch (e) {
+                        dataHtml = '<div style="margin-top:6px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:12px;overflow-x:auto;color:#666;">' + 
+                                   App.escapeHtml(log.dataJson) + 
+                                   '</div>';
+                    }
+                }
+
+                html += '<tr style="border-bottom:1px solid #f0f0f0;color:' + color + '">';
+                html += '<td style="padding:10px 8px;vertical-align:top;">' + App.escapeHtml(log.createdAt ? log.createdAt.replace('T', ' ') : '') + '</td>';
+                
+                let levelBadge = log.level;
+                if (log.level === 'ERROR') levelBadge = '<span style="background:#fff2f0;color:#ff4d4f;padding:2px 6px;border-radius:4px;border:1px solid #ffccc7;font-size:12px;">ERROR</span>';
+                else if (log.level === 'WARN') levelBadge = '<span style="background:#fffbe6;color:#fa8c16;padding:2px 6px;border-radius:4px;border:1px solid #ffe8cc;font-size:12px;">WARN</span>';
+                else if (log.level === 'INFO') levelBadge = '<span style="background:#e6f7ff;color:#1890ff;padding:2px 6px;border-radius:4px;border:1px solid #91d5ff;font-size:12px;">INFO</span>';
+                
+                html += '<td style="padding:10px 8px;vertical-align:top;">' + levelBadge + '</td>';
+                html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + App.escapeHtml(log.nodeName || log.nodeId || '-') + '</td>';
+                html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + 
+                        '<div style="line-height:1.5;">' + App.escapeHtml(log.message || '') + '</div>' + 
+                        dataHtml + 
+                        '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+        return html;
     },
 
     showExecResult(result) {
@@ -422,38 +524,13 @@ Pages.tasks = {
 
         html += '</div>';
 
-        // Show modal without confirm button (read-only result)
-        var overlay = document.getElementById('modal-overlay');
-        if (overlay) overlay.remove();
+        App.showModal('执行结果', html, () => {
+            App.hideModal();
+        }, { width: '800px', maxWidth: '90vw', fullscreenable: true });
 
-        overlay = document.createElement('div');
-        overlay.id = 'modal-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:5000;';
-
-        var modal = document.createElement('div');
-        modal.style.cssText = 'background:#fff;border-radius:8px;width:640px;max-width:90vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);';
-
-        var header = document.createElement('div');
-        header.style.cssText = 'padding:16px 24px;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;justify-content:space-between;';
-        header.innerHTML = '<span style="font-size:16px;font-weight:600;">执行结果</span><button id="exec-close-btn" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999;padding:0;line-height:1;">&times;</button>';
-
-        var body = document.createElement('div');
-        body.style.cssText = 'padding:24px;overflow-y:auto;flex:1;';
-        body.innerHTML = html;
-
-        var footer = document.createElement('div');
-        footer.style.cssText = 'padding:12px 24px;border-top:1px solid #e8e8e8;display:flex;justify-content:flex-end;';
-        footer.innerHTML = '<button id="exec-ok-btn" style="padding:8px 24px;border:none;border-radius:4px;background:#1890ff;color:#fff;cursor:pointer;font-size:14px;">关闭</button>';
-
-        modal.appendChild(header);
-        modal.appendChild(body);
-        modal.appendChild(footer);
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        var closeModal = function() { overlay.remove(); };
-        document.getElementById('exec-close-btn').addEventListener('click', closeModal);
-        document.getElementById('exec-ok-btn').addEventListener('click', closeModal);
-        overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
+        const cancelBtn = document.getElementById('modal-cancel-btn');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        if (confirmBtn) confirmBtn.textContent = '关闭';
     }
 };

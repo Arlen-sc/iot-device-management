@@ -1,0 +1,184 @@
+package com.iot.tracing;
+
+import io.micrometer.tracing.Span;
+import io.micrometer.tracing.Tracer;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.concurrent.Callable;
+
+/**
+ * 链路追踪服务
+ * 提供分布式链路追踪功能
+ */
+@Slf4j
+@Service
+public class TracingService {
+    
+    private final Tracer tracer;
+    
+    public TracingService(Tracer tracer) {
+        this.tracer = tracer;
+    }
+    
+    /**
+     * 获取当前 Trace ID
+     */
+    public String getCurrentTraceId() {
+        Span span = tracer.currentSpan();
+        return span != null ? span.context().traceId() : null;
+    }
+    
+    /**
+     * 获取当前 Span ID
+     */
+    public String getCurrentSpanId() {
+        Span span = tracer.currentSpan();
+        return span != null ? span.context().spanId() : null;
+    }
+    
+    /**
+     * 创建新的 Span
+     */
+    public Span createSpan(String name) {
+        return tracer.nextSpan().name(name).start();
+    }
+    
+    /**
+     * 创建子 Span
+     */
+    public Span createChildSpan(String name) {
+        Span currentSpan = tracer.currentSpan();
+        if (currentSpan != null) {
+            return tracer.nextSpan(currentSpan).name(name).start();
+        }
+        return createSpan(name);
+    }
+    
+    /**
+     * 在 Span 中执行操作
+     */
+    public <T> T executeWithSpan(String spanName, Callable<T> action) {
+        Span span = createSpan(spanName);
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            return action.call();
+        } catch (Exception e) {
+            span.error(e);
+            throw new RuntimeException(e);
+        } finally {
+            span.end();
+        }
+    }
+    
+    /**
+     * 在 Span 中执行操作（无返回值）
+     */
+    public void runWithSpan(String spanName, Runnable action) {
+        Span span = createSpan(spanName);
+        try (Tracer.SpanInScope ignored = tracer.withSpan(span)) {
+            action.run();
+        } catch (Exception e) {
+            span.error(e);
+            throw e;
+        } finally {
+            span.end();
+        }
+    }
+    
+    /**
+     * 添加标签到当前 Span
+     */
+    public void addTag(String key, String value) {
+        Span span = tracer.currentSpan();
+        if (span != null) {
+            span.tag(key, value);
+        }
+    }
+    
+    /**
+     * 添加多个标签到当前 Span
+     */
+    public void addTags(Map<String, String> tags) {
+        Span span = tracer.currentSpan();
+        if (span != null) {
+            for (Map.Entry<String, String> entry : tags.entrySet()) {
+                span.tag(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+    
+    /**
+     * 添加事件到当前 Span
+     */
+    public void addEvent(String eventName) {
+        Span span = tracer.currentSpan();
+        if (span != null) {
+            span.event(eventName);
+        }
+    }
+    
+    /**
+     * 记录设备连接
+     */
+    public void traceDeviceConnection(String deviceId, String protocolType, boolean success) {
+        Span span = createChildSpan("device.connect");
+        span.tag("device.id", deviceId);
+        span.tag("protocol.type", protocolType);
+        span.tag("connection.status", success ? "success" : "failed");
+        span.end();
+    }
+    
+    /**
+     * 记录数据读取
+     */
+    public void traceDataRead(String deviceId, String pointCode, Object value) {
+        Span span = createChildSpan("device.read");
+        span.tag("device.id", deviceId);
+        span.tag("point.code", pointCode);
+        if (value != null) {
+            span.tag("data.value", String.valueOf(value));
+        }
+        span.end();
+    }
+    
+    /**
+     * 记录数据写入
+     */
+    public void traceDataWrite(String deviceId, String pointCode, Object value) {
+        Span span = createChildSpan("device.write");
+        span.tag("device.id", deviceId);
+        span.tag("point.code", pointCode);
+        if (value != null) {
+            span.tag("data.value", String.valueOf(value));
+        }
+        span.end();
+    }
+    
+    /**
+     * 记录流程执行
+     */
+    public void traceFlowExecution(String flowId, String flowName, String nodeId, String nodeName) {
+        Span span = createChildSpan("flow.execute");
+        span.tag("flow.id", flowId);
+        span.tag("flow.name", flowName);
+        if (nodeId != null) {
+            span.tag("node.id", nodeId);
+        }
+        if (nodeName != null) {
+            span.tag("node.name", nodeName);
+        }
+        span.end();
+    }
+    
+    /**
+     * 记录异常
+     */
+    public void traceError(Throwable throwable) {
+        Span span = tracer.currentSpan();
+        if (span != null) {
+            span.error(throwable);
+        }
+        log.error("Traced error", throwable);
+    }
+}

@@ -31,6 +31,10 @@ public class FlowExecutor {
     }
 
     public void execute(FlowDefinition flow, FlowExecutionContext context) {
+        // 生成唯一的eventId
+        String eventId = java.util.UUID.randomUUID().toString();
+        context.setEventId(eventId);
+        
         FlowNode startNode = flow.findStartNode();
         if (startNode == null) {
             context.addLog("ERROR: No START node found in flow definition");
@@ -41,6 +45,7 @@ public class FlowExecutor {
         log.info("Starting flow execution from node: {}", startNode.getName());
         context.addLog("================ 流程执行开始 ================");
         context.addLog("流程ID: " + context.getFlowConfigId() + ", 流程名称: " + context.getFlowName());
+        context.addLog("事件ID: " + eventId);
         context.addLog("【初始上下文数据】" + abbreviateLogData(context.getVariables().toString()));
 
         executeNode(startNode, flow, context);
@@ -155,6 +160,7 @@ public class FlowExecutor {
                 FlowExecutionLog logRecord = new FlowExecutionLog();
                 logRecord.setFlowConfigId(Long.valueOf(context.getFlowConfigId()));
                 logRecord.setFlowName(context.getFlowName());
+                logRecord.setEventId(context.getEventId());
                 logRecord.setNodeId(node.getId());
                 logRecord.setNodeName(node.getName());
                 logRecord.setLevel("ERROR");

@@ -88,7 +88,7 @@ const App = {
         }, 3000);
     },
 
-    showModal(title, bodyHtml, onConfirm) {
+    showModal(title, bodyHtml, onConfirm, options = {}) {
         let overlay = document.getElementById('modal-overlay');
         if (overlay) overlay.remove();
 
@@ -97,14 +97,24 @@ const App = {
         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:5000;';
 
         const modal = document.createElement('div');
-        modal.style.cssText = 'background:#fff;border-radius:8px;width:560px;max-width:90vw;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);';
+        const defaultWidth = options.width || '560px';
+        const defaultMaxWidth = options.maxWidth || '90vw';
+        modal.style.cssText = `background:#fff;border-radius:8px;width:${defaultWidth};max-width:${defaultMaxWidth};max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);position:relative;transition:all 0.3s ease;`;
 
         const header = document.createElement('div');
-        header.style.cssText = 'padding:16px 24px;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;justify-content:space-between;';
-        header.innerHTML = '<span style="font-size:16px;font-weight:600;">' + App.escapeHtml(title) + '</span><button id="modal-close-btn" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999;padding:0;line-height:1;">&times;</button>';
+        header.style.cssText = 'padding:16px 24px;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;justify-content:space-between;cursor:move;user-select:none;';
+        
+        let headerContent = `<span style="font-size:16px;font-weight:600;">${App.escapeHtml(title)}</span>`;
+        headerContent += '<div style="display:flex;gap:12px;align-items:center;">';
+        if (options.fullscreenable !== false) {
+            headerContent += '<button id="modal-fullscreen-btn" style="border:none;background:none;font-size:14px;cursor:pointer;color:#666;padding:0;line-height:1;" title="全屏/还原">⛶</button>';
+        }
+        headerContent += '<button id="modal-close-btn" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999;padding:0;line-height:1;">&times;</button>';
+        headerContent += '</div>';
+        header.innerHTML = headerContent;
 
         const body = document.createElement('div');
-        body.style.cssText = 'padding:24px;overflow-y:auto;flex:1;';
+        body.style.cssText = 'padding:24px;overflow-y:auto;flex:1;display:flex;flex-direction:column;';
         body.innerHTML = bodyHtml;
 
         const footer = document.createElement('div');
@@ -118,12 +128,65 @@ const App = {
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
 
+        // Drag functionality
+        let isDragging = false;
+        let startX, startY, initialLeft, initialTop;
+        
+        header.addEventListener('mousedown', (e) => {
+            if (e.target.tagName.toLowerCase() === 'button') return;
+            isDragging = true;
+            
+            // Get current transform or default to 0
+            const style = window.getComputedStyle(modal);
+            const matrix = new DOMMatrixReadOnly(style.transform);
+            initialLeft = matrix.m41;
+            initialTop = matrix.m42;
+            
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            modal.style.transition = 'none'; // Disable transition while dragging
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            modal.style.transform = `translate(${initialLeft + dx}px, ${initialTop + dy}px)`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                modal.style.transition = 'all 0.3s ease';
+            }
+        });
+
+        // Fullscreen functionality
+        let isFullscreen = false;
+        let preFullscreenCss = '';
+        let preTransform = '';
+        const fsBtn = document.getElementById('modal-fullscreen-btn');
+        if (fsBtn) {
+            fsBtn.addEventListener('click', () => {
+                if (!isFullscreen) {
+                    preFullscreenCss = modal.style.cssText;
+                    preTransform = modal.style.transform;
+                    modal.style.cssText = `background:#fff;width:100vw;height:100vh;max-width:none;max-height:none;display:flex;flex-direction:column;position:fixed;top:0;left:0;border-radius:0;z-index:5001;transform:none;transition:all 0.3s ease;`;
+                } else {
+                    modal.style.cssText = preFullscreenCss;
+                    modal.style.transform = preTransform;
+                }
+                isFullscreen = !isFullscreen;
+            });
+        }
+
         document.getElementById('modal-close-btn').addEventListener('click', () => App.hideModal());
         document.getElementById('modal-cancel-btn').addEventListener('click', () => App.hideModal());
         document.getElementById('modal-confirm-btn').addEventListener('click', () => {
             if (typeof onConfirm === 'function') onConfirm();
         });
-        overlay.addEventListener('click', (e) => {
+        overlay.addEventListener('mousedown', (e) => {
             if (e.target === overlay) App.hideModal();
         });
     },

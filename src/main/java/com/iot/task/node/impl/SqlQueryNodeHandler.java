@@ -1,13 +1,17 @@
 package com.iot.task.node.impl;
 
+import com.iot.config.DataSourceManager;
 import com.iot.task.engine.FlowExecutionContext;
 import com.iot.task.model.FlowNode;
 import com.iot.task.node.NodeHandler;
 import com.iot.task.node.NodeResult;
+import com.iot.util.EncryptionUtil;
 import com.iot.util.JdbcUtils;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import javax.sql.DataSource;
 import java.sql.*;
 import java.util.*;
 
@@ -20,13 +24,17 @@ import java.util.*;
  *   dbPort         - database port (default 3306)
  *   dbName         - database / schema name
  *   username       - DB username
- *   password       - DB password
+ *   password       - DB password (encrypted)
  *   sql            - SQL statement (supports ${variableName} placeholders)
  *   outputVariable - variable to store result (default "sqlResult")
  */
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class SqlQueryNodeHandler implements NodeHandler {
+
+    private final DataSourceManager dataSourceManager;
+    private final EncryptionUtil encryptionUtil;
 
     @Override
     public String getType() {
@@ -57,16 +65,22 @@ public class SqlQueryNodeHandler implements NodeHandler {
                 return NodeResult.error("SQL_QUERY: sql is required");
             }
 
+            // 解密密码
+            String decryptedPassword = encryptionUtil.decrypt(password);
+
             // Resolve ${variable} placeholders in SQL
             sql = JdbcUtils.resolveVariables(sql, context);
 
-            String jdbcUrl = JdbcUtils.buildJdbcUrl(dbType, dbHost, dbPort, dbName);
-
-            log.info("SQL_QUERY node '{}': connecting to {} and executing SQL", node.getName(), jdbcUrl);
+            log.info("SQL_QUERY node '{}': connecting to {}:{} and executing SQL", node.getName(), dbHost, dbPort);
             context.addLog("SQL connecting to " + dbHost + ":" + dbPort + "/" + dbName);
 
+            // 使用连接池获取数据源
+            DataSource dataSource = dataSourceManager.getOrCreateDataSource(
+                dbType, dbHost, dbPort, dbName, username, decryptedPassword
+            );
+
             Object result;
-            try (Connection conn = DriverManager.getConnection(jdbcUrl, username, password);
+            try (Connection conn = dataSource.getConnection();
                  Statement stmt = conn.createStatement()) {
 
                 // Determine if this is a query (SELECT) or update

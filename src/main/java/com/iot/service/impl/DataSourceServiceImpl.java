@@ -4,6 +4,9 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.iot.entity.DataSource;
 import com.iot.mapper.DataSourceMapper;
 import com.iot.service.DataSourceService;
+import com.iot.util.EncryptionUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
@@ -14,9 +17,13 @@ import java.util.Map;
 /**
  * 数据源服务实现类
  */
+@Slf4j
 @Service
+@RequiredArgsConstructor
 public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSource>
         implements DataSourceService {
+
+    private final EncryptionUtil encryptionUtil;
 
     // 数据库类型到驱动类名的映射
     private static final Map<String, String> DRIVER_MAP = new HashMap<>();
@@ -49,28 +56,76 @@ public class DataSourceServiceImpl extends ServiceImpl<DataSourceMapper, DataSou
         URL_TEMPLATE_MAP.put("pg", "jdbc:postgresql://localhost:5432/test");
     }
 
+    /**
+     * 保存数据源信息，对密码进行加密处理
+     * @param entity 数据源实体
+     * @return 保存是否成功
+     */
+    @Override
+    public boolean save(DataSource entity) {
+        if (entity.getPassword() != null && !entity.getPassword().isEmpty()) {
+            entity.setPassword(encryptionUtil.encrypt(entity.getPassword()));
+        }
+        return super.save(entity);
+    }
+
+    /**
+     * 更新数据源信息，对密码进行加密处理
+     * @param entity 数据源实体
+     * @return 更新是否成功
+     */
+    @Override
+    public boolean updateById(DataSource entity) {
+        if (entity.getPassword() != null && !entity.getPassword().isEmpty() 
+            && !encryptionUtil.isEncrypted(entity.getPassword())) {
+            entity.setPassword(encryptionUtil.encrypt(entity.getPassword()));
+        }
+        return super.updateById(entity);
+    }
+
+    /**
+     * 根据ID获取数据源信息，密码显示为星号
+     * @param id 数据源ID
+     * @return 数据源实体
+     */
+    public DataSource getById(Long id) {
+        DataSource dataSource = super.getById(id);
+        if (dataSource != null && dataSource.getPassword() != null) {
+            dataSource.setPassword("******");
+        }
+        return dataSource;
+    }
+
+    /**
+     * 测试数据源连接
+     * @param dataSource 数据源配置
+     * @return 连接是否成功
+     */
     @Override
     public boolean testConnection(DataSource dataSource) {
         Connection connection = null;
         try {
-            // 加载驱动
+            String password = dataSource.getPassword();
+            if (password != null && encryptionUtil.isEncrypted(password)) {
+                password = encryptionUtil.decrypt(password);
+            }
+            
             Class.forName(dataSource.getDriverClass());
-            // 建立连接
             connection = DriverManager.getConnection(
                     dataSource.getUrl(),
                     dataSource.getUsername(),
-                    dataSource.getPassword()
+                    password
             );
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("测试数据源连接失败: {}", e.getMessage());
             return false;
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (Exception e) {
-                    e.printStackTrace();
+                    log.error("关闭连接失败", e);
                 }
             }
         }

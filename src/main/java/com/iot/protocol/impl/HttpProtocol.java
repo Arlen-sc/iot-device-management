@@ -121,4 +121,59 @@ public class HttpProtocol implements IoTProtocol {
         }
         return Map.of();
     }
+
+    @Override
+    public String getDriverName() {
+        return "HTTP Protocol Driver";
+    }
+
+    @Override
+    public String getDriverVersion() {
+        return "1.0.0";
+    }
+
+    @Override
+    public void initialize(com.iot.protocol.core.DriverConfig config) throws com.iot.protocol.core.DriverException {
+        log.info("HTTP protocol initialized");
+    }
+
+    @Override
+    public com.iot.protocol.core.DriverStatus getStatus() {
+        return com.iot.protocol.core.DriverStatus.RUNNING;
+    }
+
+    @Override
+    public com.iot.protocol.core.ReadResult read(com.iot.entity.Device device, com.iot.protocol.core.PointInfo pointInfo) throws com.iot.protocol.core.DriverException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public java.util.List<com.iot.protocol.core.ReadResult> batchRead(com.iot.entity.Device device, java.util.List<com.iot.protocol.core.PointInfo> pointInfos) throws com.iot.protocol.core.DriverException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public com.iot.protocol.core.WriteResult write(com.iot.entity.Device device, com.iot.protocol.core.PointInfo pointInfo, Object value) throws com.iot.protocol.core.DriverException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public java.util.List<com.iot.protocol.core.WriteResult> batchWrite(com.iot.entity.Device device, java.util.Map<com.iot.protocol.core.PointInfo, Object> dataMap) throws com.iot.protocol.core.DriverException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public void subscribe(com.iot.entity.Device device, java.util.List<com.iot.protocol.core.PointInfo> pointInfos, com.iot.protocol.core.DataChangeListener listener) throws com.iot.protocol.core.DriverException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public void unsubscribe(com.iot.entity.Device device, java.util.List<com.iot.protocol.core.PointInfo> pointInfos) throws com.iot.protocol.core.DriverException {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public void destroy() throws com.iot.protocol.core.DriverException {
+        log.info("HTTP protocol destroyed");
+    }
 }

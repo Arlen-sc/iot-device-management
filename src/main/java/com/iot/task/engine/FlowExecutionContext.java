@@ -16,6 +16,7 @@ public class FlowExecutionContext {
     private Map<String, Object> variables = new HashMap<>();
     private String flowConfigId;
     private String flowName;
+    private String eventId;
     private boolean completed;
     private List<String> executionLog = new ArrayList<>();
 

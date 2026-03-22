@@ -191,6 +191,6 @@ Pages.devices = {
             } catch (err) {
                 App.showToast('操作失败: ' + err.message, 'error');
             }
-        });
+        }, { fullscreenable: true });
     }
 };

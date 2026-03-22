@@ -1,19 +1,19 @@
 const DebugConsole = {
     show: function(taskId) {
-        var html = '<div style="display:flex;flex-direction:column;gap:16px;height:60vh;">' +
-            '<div style="display:flex;justify-content:space-between;align-items:center;background:#fafafa;padding:12px;border-radius:4px;border:1px solid #e8e8e8;">' +
+        var html = '<div style="display:flex;flex-direction:column;gap:16px;height:100%;min-height:400px;flex:1;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;background:#fafafa;padding:12px;border-radius:4px;border:1px solid #e8e8e8;flex-shrink:0;">' +
             '  <span style="font-size:14px;font-weight:bold;color:#333;">流程调试控制台</span>' +
             '  <button id="btn-run-debug" style="padding:6px 16px;background:#52c41a;color:#fff;border:none;border-radius:4px;cursor:pointer;">开始运行</button>' +
             '</div>' +
-            '<div style="display:flex;gap:16px;flex:1;min-height:0;">' +
-            '  <div style="flex:2;display:flex;flex-direction:column;border:1px solid #e8e8e8;border-radius:4px;">' +
-            '    <div style="padding:8px;background:#f5f5f5;border-bottom:1px solid #e8e8e8;font-weight:bold;font-size:13px;">运行过程 (日志)</div>' +
+            '<div style="display:flex;gap:16px;flex:1;min-height:0;overflow:hidden;">' +
+            '  <div style="flex:2;display:flex;flex-direction:column;border:1px solid #e8e8e8;border-radius:4px;overflow:hidden;">' +
+            '    <div style="padding:8px;background:#f5f5f5;border-bottom:1px solid #e8e8e8;font-weight:bold;font-size:13px;flex-shrink:0;">运行过程 (日志)</div>' +
             '    <div id="debug-logs" style="flex:1;overflow-y:auto;padding:12px;background:#1e1e1e;color:#a0e8af;font-family:monospace;font-size:13px;line-height:1.6;">' +
             '      <div style="color:#666;">等待运行...</div>' +
             '    </div>' +
             '  </div>' +
-            '  <div style="flex:1;display:flex;flex-direction:column;border:1px solid #e8e8e8;border-radius:4px;">' +
-            '    <div style="padding:8px;background:#f5f5f5;border-bottom:1px solid #e8e8e8;font-weight:bold;font-size:13px;">变量状态</div>' +
+            '  <div style="flex:1;display:flex;flex-direction:column;border:1px solid #e8e8e8;border-radius:4px;overflow:hidden;">' +
+            '    <div style="padding:8px;background:#f5f5f5;border-bottom:1px solid #e8e8e8;font-weight:bold;font-size:13px;flex-shrink:0;">变量状态</div>' +
             '    <div id="debug-vars" style="flex:1;overflow-y:auto;padding:12px;font-family:monospace;font-size:13px;background:#fff;">' +
             '      <div style="color:#999;">暂无数据</div>' +
             '    </div>' +
@@ -21,32 +21,14 @@ const DebugConsole = {
             '</div>' +
             '</div>';
 
-        var overlay = document.getElementById('debug-modal-overlay');
-        if (overlay) overlay.remove();
-
-        overlay = document.createElement('div');
-        overlay.id = 'debug-modal-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:5000;';
-
-        var modal = document.createElement('div');
-        modal.style.cssText = 'background:#fff;border-radius:8px;width:900px;max-width:95vw;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);';
-
-        var header = document.createElement('div');
-        header.style.cssText = 'padding:16px 24px;border-bottom:1px solid #e8e8e8;display:flex;align-items:center;justify-content:space-between;';
-        header.innerHTML = '<h3 style="margin:0;font-size:18px;">调试界面</h3><button id="debug-close-btn" style="border:none;background:none;font-size:20px;cursor:pointer;color:#999;padding:0;line-height:1;">&times;</button>';
-
-        var body = document.createElement('div');
-        body.style.cssText = 'padding:24px;';
-        body.innerHTML = html;
-
-        modal.appendChild(header);
-        modal.appendChild(body);
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        var closeModal = function() { overlay.remove(); };
-        document.getElementById('debug-close-btn').addEventListener('click', closeModal);
-        overlay.addEventListener('click', function(e) { if (e.target === overlay) closeModal(); });
+        App.showModal('调试界面', html, () => {
+            App.hideModal();
+        }, { width: '1000px', maxWidth: '95vw', fullscreenable: true });
+        
+        const cancelBtn = document.getElementById('modal-cancel-btn');
+        if (cancelBtn) cancelBtn.style.display = 'none';
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        if (confirmBtn) confirmBtn.textContent = '关闭';
 
         document.getElementById('btn-run-debug').addEventListener('click', async function() {
             var btn = this;
