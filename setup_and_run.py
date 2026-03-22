@@ -42,7 +42,7 @@ def setup_and_run():
     }
     
     req = urllib.request.Request(
-        'http://localhost:18080/api/task-flow-configs',
+        'http://localhost:18082/api/task-flow-configs',
         data=json.dumps(create_payload).encode('utf-8'),
         headers={'Content-Type': 'application/json'}
     )
@@ -51,7 +51,7 @@ def setup_and_run():
         res = json.loads(response.read().decode())
         print("Create Flow Result:", res)
 
-    req = urllib.request.Request('http://localhost:18080/api/task-flow-configs')
+    req = urllib.request.Request('http://localhost:18082/api/task-flow-configs')
     with urllib.request.urlopen(req) as response:
         flows = json.loads(response.read().decode())['data']
         flow_id = flows[-1]['id']
@@ -62,7 +62,7 @@ def setup_and_run():
 
     # 3. Execute the flow
     req = urllib.request.Request(
-        f'http://localhost:18080/api/task-flow-configs/{flow_id}/execute',
+        f'http://localhost:18082/api/task-flow-configs/{flow_id}/execute',
         method='POST'
     )
     

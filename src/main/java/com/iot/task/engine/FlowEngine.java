@@ -245,7 +245,13 @@ public class FlowEngine {
             // Sleep between iterations
             if (!runner.stop) {
                 try {
-                    Thread.sleep(runner.intervalMs);
+                    if (runner.intervalMs > 0) {
+                        Thread.sleep(runner.intervalMs);
+                    } else {
+                        // 如果未设置间隔或间隔为 0，这实际上应该是一个单次执行，或者至少需要一个默认间隔以防止 CPU 100% 占用。
+                        // 并且如果我们只希望按步骤单次执行（作为事务），那么不应该在这里一直循环。
+                        Thread.sleep(1000); // 暂时加一个保护，但根本原因在业务逻辑触发
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     break;

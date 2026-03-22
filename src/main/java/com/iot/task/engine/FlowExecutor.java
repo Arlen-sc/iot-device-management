@@ -95,6 +95,8 @@ public class FlowExecutor {
 
         if (result == null) {
             context.addLog("WARN", "【节点执行警告】返回了空结果", nodeType, node.getName(), null, null);
+            // 对于定时任务，如果节点返回空结果，跳过并完成任务
+            context.setCompleted(true);
             return;
         }
 
@@ -102,11 +104,18 @@ public class FlowExecutor {
             log.warn("Node {} failed: {}", node.getName(), result.getErrorMessage());
             context.addLog("ERROR", "【节点执行失败】" + result.getErrorMessage(), nodeType, node.getName(), null, null);
             saveErrorToDb(node, nodeType, context, result.getErrorMessage());
+            // 对于定时任务，如果节点执行失败，跳过并完成任务
+            context.setCompleted(true);
             return;
         } else {
              if (result.getResultData() != null) {
                  context.setVariable("node_" + node.getId() + "_result", result.getResultData());
                  context.addLog("INFO", "【节点执行结果数据】", nodeType, node.getName(), abbreviateLogData(result.getResultData().toString()), null);
+             } else {
+                 // 对于定时任务，如果节点没有返回数据，跳过并完成任务
+                 context.addLog("WARN", "【节点执行警告】没有返回数据", nodeType, node.getName(), null, null);
+                 context.setCompleted(true);
+                 return;
              }
              context.addLog("INFO", "【节点输出后上下文】", nodeType, node.getName(), abbreviateLogData(context.getVariables().toString()), null);
         }

@@ -1,0 +1,86 @@
+.designer-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f0f2f5;
+}
+
+.designer-header {
+  height: 60px;
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  z-index: 10;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.task-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.designer-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.designer-stencil {
+  width: 250px;
+  background: #fff;
+  border-right: 1px solid #e8e8e8;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.stencil-group {
+  font-size: 12px;
+  font-weight: bold;
+  color: #888;
+  margin: 16px 0 8px 0;
+  text-transform: uppercase;
+}
+
+.stencil-group:first-child {
+  margin-top: 0;
+}
+
+.stencil-item {
+  height: 36px;
+  line-height: 34px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  text-align: center;
+  cursor: grab;
+  font-size: 13px;
+  background: #fafafa;
+  transition: all 0.3s;
+}
+
+.stencil-item:hover {
+  border-color: #1890ff;
+  color: #1890ff;
+  box-shadow: 0 2px 4px rgba(24,144,255,0.1);
+}
+
+.stencil-item.start { border-color: #52c41a; color: #52c41a; background: #f6ffed; border-radius: 18px; }
+.stencil-item.end { border-color: #ff4d4f; color: #ff4d4f; background: #fff1f0; border-radius: 18px; }
+.stencil-item.condition { border-color: #faad14; color: #faad14; background: #fffbe6; }
+.stencil-item.script { border-color: #722ed1; color: #722ed1; background: #f9f0ff; }
+.stencil-item.http { border-color: #1890ff; color: #1890ff; background: #e6f7ff; }
+
+.designer-canvas-container {
+  flex: 1;
+  height: 100%;
+}
