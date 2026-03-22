@@ -483,22 +483,54 @@ Pages.tasks = {
         if (logs.length === 0) {
             html += '<div style="color:#999;font-size:13px;">无日志记录</div>';
         } else {
-            for (var i = 0; i < logs.length; i++) {
+            logs.forEach(log => {
                 var logColor = '#a0e8af';
-                var logText = App.escapeHtml(logs[i]);
-                if (logText.indexOf('ERROR') >= 0 || logText.indexOf('error') >= 0 || logText.indexOf('fail') >= 0 || logText.indexOf('【节点执行异常】') >= 0 || logText.indexOf('【节点执行失败】') >= 0) {
-                    logColor = '#ff6b6b';
-                } else if (logText.indexOf('WARN') >= 0 || logText.indexOf('warn') >= 0 || logText.indexOf('【节点执行警告】') >= 0) {
-                    logColor = '#ffd93d';
-                } else if (logText.indexOf('================') >= 0) {
-                    logColor = '#1890ff';
-                } else if (logText.indexOf('【流程流转】') >= 0) {
-                    logColor = '#b37feb';
-                } else if (logText.indexOf('【节点执行成功】') >= 0) {
-                    logColor = '#52c41a';
+                var logText = App.escapeHtml(log);
+                
+                // Parse format: [timestamp] [actionType] [nodeName] message
+                var match = logText.match(/^\[(.*?)\]\s+\[(.*?)\]\s+\[(.*?)\]\s+(.*)$/s);
+                var displayHtml = logText;
+                
+                if (match) {
+                    var time = match[1];
+                    var action = match[2];
+                    var node = match[3];
+                    var msg = match[4];
+                    
+                    if (msg.indexOf('ERROR') >= 0 || msg.indexOf('error') >= 0 || msg.indexOf('fail') >= 0 || msg.indexOf('【节点执行异常】') >= 0 || msg.indexOf('【节点执行失败】') >= 0) {
+                        logColor = '#ff6b6b';
+                    } else if (msg.indexOf('WARN') >= 0 || msg.indexOf('warn') >= 0 || msg.indexOf('【节点执行警告】') >= 0) {
+                        logColor = '#ffd93d';
+                    } else if (msg.indexOf('================') >= 0) {
+                        logColor = '#1890ff';
+                    } else if (msg.indexOf('【流程流转】') >= 0) {
+                        logColor = '#b37feb';
+                    } else if (msg.indexOf('【节点执行成功】') >= 0) {
+                        logColor = '#52c41a';
+                    }
+                    
+                    var badges = '';
+                    if (action && action !== '-') badges += '<span style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;margin-right:8px;font-size:11px;color:#fff;">' + action + '</span>';
+                    if (node && node !== '-') badges += '<span style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;margin-right:8px;font-size:11px;color:#ddd;">' + node + '</span>';
+                    
+                    displayHtml = '<div style="color:#666;font-size:11px;margin-bottom:2px;">[' + time + '] ' + badges + '</div>' + 
+                                  '<div style="padding-left:4px;border-left:2px solid ' + logColor + ';">' + msg + '</div>';
+                } else {
+                    if (logText.indexOf('ERROR') >= 0 || logText.indexOf('error') >= 0 || logText.indexOf('fail') >= 0 || logText.indexOf('【节点执行异常】') >= 0 || logText.indexOf('【节点执行失败】') >= 0) {
+                        logColor = '#ff6b6b';
+                    } else if (logText.indexOf('WARN') >= 0 || logText.indexOf('warn') >= 0 || logText.indexOf('【节点执行警告】') >= 0) {
+                        logColor = '#ffd93d';
+                    } else if (logText.indexOf('================') >= 0) {
+                        logColor = '#1890ff';
+                    } else if (logText.indexOf('【流程流转】') >= 0) {
+                        logColor = '#b37feb';
+                    } else if (logText.indexOf('【节点执行成功】') >= 0) {
+                        logColor = '#52c41a';
+                    }
                 }
-                html += '<div style="color:' + logColor + ';margin-bottom:6px;word-break:break-all;border-bottom:1px dashed #333;padding-bottom:4px;">' + logText + '</div>';
-            }
+                
+                html += '<div style="color:' + logColor + ';margin-bottom:8px;word-break:break-all;border-bottom:1px dashed #333;padding-bottom:6px;">' + displayHtml + '</div>';
+            });
         }
         html += '</div></div>';
 

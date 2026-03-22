@@ -22,6 +22,7 @@ public class FlowExecutionLog {
 
     private String nodeName;
 
+    @TableField("action_type")
     private String actionType;
 
     private String level;

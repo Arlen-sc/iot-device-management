@@ -39,8 +39,14 @@ public class FlowExecutionContext {
     }
 
     public void addLog(String message) {
+        addLog(message, "SYSTEM", "System");
+    }
+
+    public void addLog(String message, String actionType, String nodeName) {
         String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
-        executionLog.add("[" + timestamp + "] " + message);
+        // We encode actionType and nodeName in the log string for the frontend to parse if needed
+        // format: [timestamp] [actionType] [nodeName] message
+        executionLog.add(String.format("[%s] [%s] [%s] %s", timestamp, actionType != null ? actionType : "-", nodeName != null ? nodeName : "-", message));
     }
 
     public Device getDevice() {

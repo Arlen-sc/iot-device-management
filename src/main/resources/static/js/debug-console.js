@@ -53,19 +53,50 @@ const DebugConsole = {
                     logs.forEach((logText) => {
                         var logColor = '#a0e8af';
                         var escaped = App.escapeHtml(logText);
-                        if (escaped.indexOf('ERROR') >= 0 || escaped.indexOf('error') >= 0 || escaped.indexOf('fail') >= 0 || escaped.indexOf('【节点执行异常】') >= 0 || escaped.indexOf('【节点执行失败】') >= 0) {
-                            logColor = '#ff6b6b';
-                        } else if (escaped.indexOf('WARN') >= 0 || escaped.indexOf('warn') >= 0 || escaped.indexOf('【节点执行警告】') >= 0) {
-                            logColor = '#ffd93d';
-                        } else if (escaped.indexOf('================') >= 0) {
-                            logColor = '#1890ff';
-                        } else if (escaped.indexOf('【流程流转】') >= 0) {
-                            logColor = '#b37feb';
-                        } else if (escaped.indexOf('【节点执行成功】') >= 0) {
-                            logColor = '#52c41a';
+                        
+                        // Parse format: [timestamp] [actionType] [nodeName] message
+                        var match = escaped.match(/^\[(.*?)\]\s+\[(.*?)\]\s+\[(.*?)\]\s+(.*)$/s);
+                        var displayHtml = escaped;
+                        
+                        if (match) {
+                            var time = match[1];
+                            var action = match[2];
+                            var node = match[3];
+                            var msg = match[4];
+                            
+                            if (msg.indexOf('ERROR') >= 0 || msg.indexOf('error') >= 0 || msg.indexOf('fail') >= 0 || msg.indexOf('【节点执行异常】') >= 0 || msg.indexOf('【节点执行失败】') >= 0) {
+                                logColor = '#ff6b6b';
+                            } else if (msg.indexOf('WARN') >= 0 || msg.indexOf('warn') >= 0 || msg.indexOf('【节点执行警告】') >= 0) {
+                                logColor = '#ffd93d';
+                            } else if (msg.indexOf('================') >= 0) {
+                                logColor = '#1890ff';
+                            } else if (msg.indexOf('【流程流转】') >= 0) {
+                                logColor = '#b37feb';
+                            } else if (msg.indexOf('【节点执行成功】') >= 0) {
+                                logColor = '#52c41a';
+                            }
+                            
+                            var badges = '';
+                            if (action && action !== '-') badges += '<span style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;margin-right:8px;font-size:11px;color:#fff;">' + action + '</span>';
+                            if (node && node !== '-') badges += '<span style="background:rgba(255,255,255,0.1);padding:2px 6px;border-radius:4px;margin-right:8px;font-size:11px;color:#ddd;">' + node + '</span>';
+                            
+                            displayHtml = '<div style="color:#666;font-size:11px;margin-bottom:2px;">[' + time + '] ' + badges + '</div>' + 
+                                          '<div style="padding-left:4px;border-left:2px solid ' + logColor + ';">' + msg + '</div>';
+                        } else {
+                            if (escaped.indexOf('ERROR') >= 0 || escaped.indexOf('error') >= 0 || escaped.indexOf('fail') >= 0 || escaped.indexOf('【节点执行异常】') >= 0 || escaped.indexOf('【节点执行失败】') >= 0) {
+                                logColor = '#ff6b6b';
+                            } else if (escaped.indexOf('WARN') >= 0 || escaped.indexOf('warn') >= 0 || escaped.indexOf('【节点执行警告】') >= 0) {
+                                logColor = '#ffd93d';
+                            } else if (escaped.indexOf('================') >= 0) {
+                                logColor = '#1890ff';
+                            } else if (escaped.indexOf('【流程流转】') >= 0) {
+                                logColor = '#b37feb';
+                            } else if (escaped.indexOf('【节点执行成功】') >= 0) {
+                                logColor = '#52c41a';
+                            }
                         }
                         
-                        logsHtml += '<div style="color:' + logColor + ';margin-bottom:6px;word-break:break-all;border-bottom:1px dashed #333;padding-bottom:4px;">' + escaped + '</div>';
+                        logsHtml += '<div style="color:' + logColor + ';margin-bottom:8px;word-break:break-all;border-bottom:1px dashed #333;padding-bottom:6px;">' + displayHtml + '</div>';
                     });
                     logsEl.innerHTML = logsHtml;
                 }

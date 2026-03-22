@@ -77,35 +77,35 @@ public class FlowExecutor {
         }
 
         log.info("Executing node: {} (type: {})", node.getName(), nodeType);
-        context.addLog(String.format("【节点执行开始】节点: %s (%s)", node.getName(), nodeType));
-        context.addLog("【节点输入数据】" + abbreviateLogData(context.getVariables().toString()));
+        context.addLog(String.format("【节点执行开始】节点: %s (%s)", node.getName(), nodeType), nodeType, node.getName());
+        context.addLog("【节点输入数据】" + abbreviateLogData(context.getVariables().toString()), nodeType, node.getName());
 
         NodeResult result;
         try {
             result = handler.execute(node, context);
-            context.addLog(String.format("【节点执行成功】节点: %s", node.getName()));
+            context.addLog(String.format("【节点执行成功】节点: %s", node.getName()), nodeType, node.getName());
         } catch (Exception e) {
             log.error("Unexpected error executing node: {}", node.getName(), e);
-            context.addLog(String.format("【节点执行异常】节点: %s, 错误: %s", node.getName(), e.getMessage()));
+            context.addLog(String.format("【节点执行异常】节点: %s, 错误: %s", node.getName(), e.getMessage()), nodeType, node.getName());
             return;
         }
 
         if (result == null) {
-            context.addLog(String.format("【节点执行警告】节点 %s 返回了空结果", node.getName()));
+            context.addLog(String.format("【节点执行警告】节点 %s 返回了空结果", node.getName()), nodeType, node.getName());
             return;
         }
 
         if (!result.isSuccess()) {
             log.warn("Node {} failed: {}", node.getName(), result.getErrorMessage());
-            context.addLog(String.format("【节点执行失败】节点: %s, 错误信息: %s", node.getName(), result.getErrorMessage()));
+            context.addLog(String.format("【节点执行失败】节点: %s, 错误信息: %s", node.getName(), result.getErrorMessage()), nodeType, node.getName());
             saveErrorToDb(node, nodeType, context, result.getErrorMessage());
             return;
         } else {
              if (result.getResultData() != null) {
                  context.setVariable("node_" + node.getId() + "_result", result.getResultData());
-                 context.addLog("【节点执行结果数据】" + abbreviateLogData(result.getResultData().toString()));
+                 context.addLog("【节点执行结果数据】" + abbreviateLogData(result.getResultData().toString()), nodeType, node.getName());
              }
-             context.addLog("【节点输出后上下文】" + abbreviateLogData(context.getVariables().toString()));
+             context.addLog("【节点输出后上下文】" + abbreviateLogData(context.getVariables().toString()), nodeType, node.getName());
         }
 
         if (context.isCompleted()) {
