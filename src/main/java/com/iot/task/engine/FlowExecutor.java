@@ -96,8 +96,9 @@ public class FlowExecutor {
             saveErrorToDb(node, context, result.getErrorMessage());
             return;
         } else {
-             if (result.getData() != null) {
-                 context.addLog("【节点执行结果数据】" + abbreviateLogData(result.getData().toString()));
+             if (result.getResultData() != null) {
+                 context.setVariable("node_" + node.getId() + "_result", result.getResultData());
+                 context.addLog("【节点执行结果数据】" + abbreviateLogData(result.getResultData().toString()));
              }
              context.addLog("【节点输出后上下文】" + abbreviateLogData(context.getVariables().toString()));
         }

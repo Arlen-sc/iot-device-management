@@ -256,27 +256,63 @@ Pages.tasks = {
             const logs = await API.get('/flow-logs/' + id + '?limit=100');
             
             var html = '<div style="margin-bottom:16px;">';
-            if (!logs || logs.length === 0) {
-                html += '<div style="color:#999;text-align:center;padding:20px;">暂无日志记录</div>';
-            } else {
-                html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+        
+        // Navigation header inside modal
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e8e8e8;">' +
+            '<div>' +
+            '<button id="log-refresh-btn" style="padding:6px 16px;background:#fff;border:1px solid #d9d9d9;border-radius:4px;cursor:pointer;font-size:13px;margin-right:8px;">刷新</button>' +
+            '<button id="log-clear-btn" style="padding:6px 16px;background:#fff;border:1px solid #ff4d4f;color:#ff4d4f;border-radius:4px;cursor:pointer;font-size:13px;">清空</button>' +
+            '</div>' +
+            '<div style="font-size:13px;color:#666;">显示最近 100 条记录</div>' +
+            '</div>';
+
+        if (!logs || logs.length === 0) {
+            html += '<div style="color:#999;text-align:center;padding:40px;background:#fafafa;border-radius:4px;">暂无日志记录</div>';
+        } else {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;">';
                 html += '<thead><tr style="background:#fafafa;">';
-                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">时间</th>';
-                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">级别</th>';
-                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">节点</th>';
-                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">消息</th>';
+                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:160px;">时间</th>';
+                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:60px;">级别</th>';
+                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:120px;">节点</th>';
+                html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;">消息与数据</th>';
                 html += '</tr></thead><tbody>';
                 
                 logs.forEach(log => {
                     let color = '#333';
-                    if (log.level === 'ERROR') color = '#ff4d4f';
-                    if (log.level === 'WARN') color = '#faad14';
+                    if (log.level === 'ERROR' || (log.message && log.message.indexOf('【节点执行失败】') >= 0) || (log.message && log.message.indexOf('【节点执行异常】') >= 0)) color = '#ff4d4f';
+                    if (log.level === 'WARN' || (log.message && log.message.indexOf('【节点执行警告】') >= 0)) color = '#faad14';
+                    if (log.message && log.message.indexOf('================') >= 0) color = '#1890ff';
+                    if (log.message && log.message.indexOf('【流程流转】') >= 0) color = '#b37feb';
+                    if (log.message && log.message.indexOf('【节点执行成功】') >= 0) color = '#52c41a';
                     
+                    let dataHtml = '';
+                    if (log.dataJson && log.dataJson !== 'null') {
+                        try {
+                            const parsed = JSON.parse(log.dataJson);
+                            dataHtml = '<div style="margin-top:6px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:12px;overflow-x:auto;color:#666;">' + 
+                                       App.escapeHtml(JSON.stringify(parsed, null, 2)) + 
+                                       '</div>';
+                        } catch(e) {
+                            dataHtml = '<div style="margin-top:6px;padding:8px;background:#f5f5f5;border-radius:4px;font-family:monospace;font-size:12px;overflow-x:auto;color:#666;">' + 
+                                       App.escapeHtml(log.dataJson) + 
+                                       '</div>';
+                        }
+                    }
+
                     html += '<tr style="border-bottom:1px solid #f0f0f0;color:' + color + '">';
-                    html += '<td style="padding:8px;white-space:nowrap;">' + App.escapeHtml(log.createdAt || '') + '</td>';
-                    html += '<td style="padding:8px;">' + App.escapeHtml(log.level || '') + '</td>';
-                    html += '<td style="padding:8px;">' + App.escapeHtml(log.nodeId || '-') + '</td>';
-                    html += '<td style="padding:8px;word-break:break-all;">' + App.escapeHtml(log.message || '') + '</td>';
+                    html += '<td style="padding:10px 8px;vertical-align:top;">' + App.escapeHtml(log.createdAt ? log.createdAt.replace('T', ' ') : '') + '</td>';
+                    
+                    let levelBadge = log.level;
+                    if (log.level === 'ERROR') levelBadge = '<span style="background:#fff2f0;color:#ff4d4f;padding:2px 6px;border-radius:4px;border:1px solid #ffccc7;font-size:12px;">ERROR</span>';
+                    else if (log.level === 'WARN') levelBadge = '<span style="background:#fffbe6;color:#fa8c16;padding:2px 6px;border-radius:4px;border:1px solid #ffe8cc;font-size:12px;">WARN</span>';
+                    else if (log.level === 'INFO') levelBadge = '<span style="background:#e6f7ff;color:#1890ff;padding:2px 6px;border-radius:4px;border:1px solid #91d5ff;font-size:12px;">INFO</span>';
+                    
+                    html += '<td style="padding:10px 8px;vertical-align:top;">' + levelBadge + '</td>';
+                    html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + App.escapeHtml(log.nodeName || log.nodeId || '-') + '</td>';
+                    html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + 
+                            '<div style="line-height:1.5;">' + App.escapeHtml(log.message || '') + '</div>' + 
+                            dataHtml + 
+                            '</td>';
                     html += '</tr>';
                 });
                 html += '</tbody></table>';
@@ -291,6 +327,31 @@ Pages.tasks = {
             if (cancelBtn) cancelBtn.style.display = 'none';
             const confirmBtn = document.getElementById('modal-confirm-btn');
             if (confirmBtn) confirmBtn.textContent = '关闭';
+
+            // Increase modal width for better log viewing
+            const modalEl = document.querySelector('#modal-overlay .modal');
+            if (modalEl) {
+                modalEl.style.width = '900px';
+                modalEl.style.maxWidth = '95vw';
+            }
+
+            // Bind events for refresh and clear
+            document.getElementById('log-refresh-btn').addEventListener('click', () => {
+                App.hideModal();
+                this.showLogsInterface(id);
+            });
+            document.getElementById('log-clear-btn').addEventListener('click', () => {
+                App.confirm('确定要清空该任务的所有日志吗？', async () => {
+                    try {
+                        await API.del('/flow-logs/' + id);
+                        App.showToast('日志已清空', 'success');
+                        App.hideModal();
+                        this.showLogsInterface(id);
+                    } catch (e) {
+                        App.showToast('清空失败: ' + e.message, 'error');
+                    }
+                });
+            });
             
         } catch (err) {
             App.showToast('加载日志失败: ' + err.message, 'error');
@@ -314,20 +375,25 @@ Pages.tasks = {
         // Execution logs section
         html += '<div style="margin-bottom:16px;">' +
             '<div style="font-size:13px;font-weight:600;color:#333;margin-bottom:8px;">执行日志</div>' +
-            '<div style="background:#1a1a2e;border-radius:6px;padding:12px;max-height:240px;overflow-y:auto;">';
+            '<div style="background:#1e1e1e;border-radius:6px;padding:12px;max-height:300px;overflow-y:auto;font-family:monospace;font-size:13px;line-height:1.6;">';
         if (logs.length === 0) {
             html += '<div style="color:#999;font-size:13px;">无日志记录</div>';
         } else {
             for (var i = 0; i < logs.length; i++) {
                 var logColor = '#a0e8af';
                 var logText = App.escapeHtml(logs[i]);
-                if (logText.indexOf('ERROR') >= 0 || logText.indexOf('error') >= 0 || logText.indexOf('fail') >= 0) {
+                if (logText.indexOf('ERROR') >= 0 || logText.indexOf('error') >= 0 || logText.indexOf('fail') >= 0 || logText.indexOf('【节点执行异常】') >= 0 || logText.indexOf('【节点执行失败】') >= 0) {
                     logColor = '#ff6b6b';
-                } else if (logText.indexOf('WARN') >= 0 || logText.indexOf('warn') >= 0) {
+                } else if (logText.indexOf('WARN') >= 0 || logText.indexOf('warn') >= 0 || logText.indexOf('【节点执行警告】') >= 0) {
                     logColor = '#ffd93d';
+                } else if (logText.indexOf('================') >= 0) {
+                    logColor = '#1890ff';
+                } else if (logText.indexOf('【流程流转】') >= 0) {
+                    logColor = '#b37feb';
+                } else if (logText.indexOf('【节点执行成功】') >= 0) {
+                    logColor = '#52c41a';
                 }
-                html += '<div style="font-family:monospace;font-size:12px;color:' + logColor + ';line-height:1.8;white-space:pre-wrap;word-break:break-all;">' +
-                    '<span style="color:#666;margin-right:8px;">[' + (i + 1) + ']</span>' + logText + '</div>';
+                html += '<div style="color:' + logColor + ';margin-bottom:6px;word-break:break-all;border-bottom:1px dashed #333;padding-bottom:4px;">' + logText + '</div>';
             }
         }
         html += '</div></div>';

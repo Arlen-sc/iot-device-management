@@ -43,9 +43,9 @@ public class DataLoadNodeHandler implements NodeHandler {
     private final DataSource dataSource;
     private final ObjectMapper objectMapper;
 
-    public DataLoadNodeHandler(DataSource dataSource, ObjectMapper objectMapper) {
-        this.dataSource = dataSource;
+    public DataLoadNodeHandler(ObjectMapper objectMapper, DataSource dataSource) {
         this.objectMapper = objectMapper;
+        this.dataSource = dataSource;
     }
 
     @Override
@@ -113,17 +113,13 @@ public class DataLoadNodeHandler implements NodeHandler {
 
     private Connection getConnection(Map<String, Object> config, String dbMode) throws Exception {
         if ("REMOTE".equalsIgnoreCase(dbMode)) {
-            String dbType = (String) config.getOrDefault("dbType", "MYSQL");
-            String dbHost = (String) config.get("dbHost");
-            int dbPort = JdbcUtils.toInt(config.get("dbPort"), JdbcUtils.getDefaultPort(dbType));
-            String dbName = (String) config.get("dbName");
-            String username = (String) config.get("username");
-            String password = (String) config.get("password");
-            String jdbcUrl = JdbcUtils.buildJdbcUrl(dbType, dbHost, dbPort, dbName);
-            return DriverManager.getConnection(jdbcUrl, username, password);
+            // Reusing application's main DataSource instead of requiring manual connection configs
+            log.info("DATA_LOAD: Using system default data source for REMOTE mode");
+            return dataSource.getConnection();
+        } else {
+            // Local SQLite for isolated/embedded storage if needed
+            return JdbcUtils.getConnection();
         }
-        // LOCAL: use application DataSource (SQLite)
-        return dataSource.getConnection();
     }
 
     private String resolveVariables(String template, FlowExecutionContext context) {

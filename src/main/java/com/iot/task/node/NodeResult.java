@@ -11,6 +11,7 @@ public class NodeResult {
 
     private boolean success;
     private Object outputData;
+    private Object resultData;
     private List<String> nextNodeIds;
     private String errorMessage;
 
@@ -18,6 +19,7 @@ public class NodeResult {
         return NodeResult.builder()
                 .success(true)
                 .outputData(data)
+                .resultData(data)
                 .build();
     }
 

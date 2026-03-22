@@ -32,20 +32,66 @@ public class ConditionNodeHandler implements NodeHandler {
 
             List<Map<String, Object>> branches = (List<Map<String, Object>>) config.get("branches");
             String defaultNextNodeId = (String) config.get("defaultNextNodeId");
+            String logic = (String) config.getOrDefault("logic", "AND"); // AND or OR
 
-            log.info("Executing CONDITION node: {} with {} branches", node.getName(),
-                    branches != null ? branches.size() : 0);
+            log.info("Executing CONDITION node: {} with {} branches, logic: {}", node.getName(),
+                    branches != null ? branches.size() : 0, logic);
 
-            if (branches != null) {
-                for (Map<String, Object> branch : branches) {
-                    String branchName = (String) branch.get("name");
-                    Map<String, Object> condition = (Map<String, Object>) branch.get("condition");
-                    String nextNodeId = (String) branch.get("nextNodeId");
+            if (branches != null && !branches.isEmpty()) {
+                boolean isMatch = "AND".equalsIgnoreCase(logic); // For AND, assume true and fail on first mismatch. For OR, assume false and succeed on first match.
+                
+                // Track matches to find the target next node
+                String targetNextNodeId = null;
+                
+                // Check if we are combining conditions into a single branch evaluation
+                // In a proper OR/AND we need to evaluate all branches to see if the overall logic is met.
+                // Wait, the previous logic was: each branch has a condition and a nextNodeId.
+                // The prompt says: "而且分支条件你因该要支持and和or逻辑。"
+                // If it's branch logic, AND means all branch conditions must be met to proceed?
+                // Or does it mean a single branch can have multiple conditions?
+                // The frontend config structure we just updated:
+                // logic: 'AND'/'OR'
+                // branches: [{name, condition: {left, op, right}, nextNodeId}, ...]
+                // This means the logic applies to the branches array.
+                // So if logic is AND, ALL branch conditions must be true to proceed. If so, which nextNodeId to take? The first one?
+                // If logic is OR, ANY branch condition being true allows proceeding to its nextNodeId.
+                // Actually, if logic is AND, we evaluate all conditions. If all true, we go to... what? The first branch's nextNodeId?
+                
+                if ("OR".equalsIgnoreCase(logic)) {
+                    for (Map<String, Object> branch : branches) {
+                        String branchName = (String) branch.get("name");
+                        Map<String, Object> condition = (Map<String, Object>) branch.get("condition");
+                        String nextNodeId = (String) branch.get("nextNodeId");
 
-                    if (condition != null && evaluateBranchCondition(condition, context)) {
-                        log.info("CONDITION branch matched: {}", branchName);
-                        context.addLog("Condition matched branch: " + branchName);
-                        return NodeResult.branch(Collections.singletonList(nextNodeId));
+                        if (condition != null && evaluateBranchCondition(condition, context)) {
+                            log.info("CONDITION branch matched (OR logic): {}", branchName);
+                            context.addLog("Condition matched branch (OR logic): " + branchName);
+                            return NodeResult.branch(Collections.singletonList(nextNodeId));
+                        }
+                    }
+                } else { // AND logic
+                    boolean allMatched = true;
+                    String firstNextNodeId = null;
+                    String matchedNames = "";
+                    
+                    for (Map<String, Object> branch : branches) {
+                        String branchName = (String) branch.get("name");
+                        Map<String, Object> condition = (Map<String, Object>) branch.get("condition");
+                        if (firstNextNodeId == null) {
+                            firstNextNodeId = (String) branch.get("nextNodeId");
+                        }
+
+                        if (condition == null || !evaluateBranchCondition(condition, context)) {
+                            allMatched = false;
+                            break;
+                        }
+                        matchedNames += branchName + ", ";
+                    }
+                    
+                    if (allMatched && firstNextNodeId != null) {
+                        log.info("CONDITION all branches matched (AND logic)");
+                        context.addLog("All conditions matched (AND logic)");
+                        return NodeResult.branch(Collections.singletonList(firstNextNodeId));
                     }
                 }
             }
@@ -106,8 +152,6 @@ public class ConditionNodeHandler implements NodeHandler {
                 return substringEquals(left, right, condition);
             case "starts_with":
                 return left != null && left.toString().startsWith(right != null ? right.toString() : "");
-            case "ends_with":
-                return left != null && left.toString().endsWith(right != null ? right.toString() : "");
             case "array_length_gte":
                 if (left instanceof java.util.List<?> list) {
                     try { return list.size() >= toDouble(right); } catch (Exception e) { return false; }

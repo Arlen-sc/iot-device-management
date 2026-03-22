@@ -833,8 +833,9 @@
             h += '<input id="cfg-cronExpression" type="text" value="' + esc(config.cronExpression || '') + '" style="' + fieldStyle + '" placeholder="0 0/5 * * * ?" />';
             h += '</div>';
             h += '<div id="cfg-topic-row" style="display:' + (config.triggerType === 'EVENT' ? 'block' : 'none') + ';">';
-            h += '<label style="' + labelStyle + '">监听主题</label>';
-            h += '<input id="cfg-listenTopic" type="text" value="' + esc(config.listenTopic || '') + '" style="' + fieldStyle + '" placeholder="device/+/data" />';
+            h += '<label style="' + labelStyle + '">监听主题 (Topic) 说明</label>';
+            h += '<p style="font-size:12px;color:#888;margin-top:0;margin-bottom:8px;line-height:1.4;">如选择由设备事件或MQTT消息触发此流程，可在此处指定监听的主题(例如: /device/+/data)。流程引擎将自动把匹配该主题的消息路由到本流程进行处理。</p>';
+            h += '<input id="cfg-listenTopic" type="text" value="' + esc(config.listenTopic || '') + '" style="' + fieldStyle + '" placeholder="/device/+/data" />';
             h += '</div>';
             return h;
         },
@@ -859,6 +860,15 @@
         buildConditionConfig(config) {
             var h = this.buildNameField(config);
             var branches = config.branches || [];
+            
+            // Logic operator (AND/OR)
+            var logic = config.logic || 'AND';
+            h += '<label style="' + labelStyle + '">条件组合逻辑</label>';
+            h += '<select id="cfg-cond-logic" style="' + fieldStyle + 'margin-bottom:12px;">';
+            h += '<option value="AND"' + (logic === 'AND' ? ' selected' : '') + '>满足所有条件 (AND)</option>';
+            h += '<option value="OR"' + (logic === 'OR' ? ' selected' : '') + '>满足任一条件 (OR)</option>';
+            h += '</select>';
+
             h += '<label style="' + labelStyle + '">分支条件</label>';
             h += '<div id="cfg-branches">';
             branches.forEach(function (br, idx) {
@@ -867,17 +877,37 @@
                 h += '<input class="br-name" type="text" value="' + esc(br.name || '') + '" placeholder="分支名称" style="' + fieldStyle + 'margin-bottom:4px;" />';
                 h += '<input class="br-variable" type="text" value="' + esc(cond.left || '') + '" placeholder="变量路径" style="' + fieldStyle + 'margin-bottom:4px;" />';
                 h += '<select class="br-operator" style="' + fieldStyle + 'margin-bottom:4px;">';
-                ['==', '!=', '>', '<', '>=', '<=', 'contains', 'starts_with', 'ends_with', 'array_length_gte', 'array_length_gt', 'not_null', 'is_null'].forEach(function (op) {
-                    h += '<option value="' + op + '"' + (cond.operator === op ? ' selected' : '') + '>' + esc(op) + '</option>';
+                
+                // Use Chinese labels for operators
+                const ops = [
+                    {val: '==', label: '等于 (=='},
+                    {val: '!=', label: '不等于 (!=)'},
+                    {val: '>', label: '大于 (>)'},
+                    {val: '<', label: '小于 (<)'},
+                    {val: '>=', label: '大于等于 (>=)'},
+                    {val: '<=', label: '小于等于 (<=)'},
+                    {val: 'contains', label: '包含 (contains)'},
+                    {val: 'starts_with', label: '以...开头 (starts_with)'},
+                    {val: 'array_length_gte', label: '数组长度>= (array_length_gte)'},
+                    {val: 'array_length_gt', label: '数组长度> (array_length_gt)'},
+                    {val: 'not_null', label: '不为空 (not_null)'},
+                    {val: 'is_null', label: '为空 (is_null)'}
+                ];
+                
+                ops.forEach(function (op) {
+                    h += '<option value="' + op.val + '"' + (cond.operator === op.val ? ' selected' : '') + '>' + esc(op.label) + '</option>';
                 });
                 h += '</select>';
-                h += '<input class="br-value" type="text" value="' + esc(cond.right || '') + '" placeholder="比较值" style="' + fieldStyle + 'margin-bottom:4px;" />';
+                
+                // Hide value input for null checks
+                var hideValue = (cond.operator === 'is_null' || cond.operator === 'not_null') ? 'display:none;' : '';
+                h += '<input class="br-value" type="text" value="' + esc(cond.right || '') + '" placeholder="比较值" style="' + fieldStyle + 'margin-bottom:4px;' + hideValue + '" />';
                 h += '<button class="br-remove" data-idx="' + idx + '" style="' + smallBtn + 'background:#ff4d4f;color:#fff;">移除</button>';
                 h += '</div>';
             });
             h += '</div>';
             h += '<button id="cfg-add-branch" style="' + smallBtn + 'background:#1890ff;color:#fff;margin-top:4px;">+ 添加分支</button>';
-            h += '<label style="' + labelStyle + '">默认分支名称</label>';
+            h += '<label style="' + labelStyle + 'margin-top:12px;">默认分支名称</label>';
             h += '<input id="cfg-defaultBranch" type="text" value="' + esc(config.defaultBranch || 'default') + '" style="' + fieldStyle + '" />';
             return h;
         },
@@ -965,7 +995,7 @@
             return h;
         },
 
-        // DATA_LOAD
+            // DATA_LOAD
         buildDataLoadConfig(config) {
             var h = this.buildNameField(config);
 
@@ -973,29 +1003,19 @@
             h += '<label style="' + labelStyle + '">数据库模式</label>';
             h += '<select id="cfg-dl-dbMode" style="' + fieldStyle + '">';
             ['LOCAL', 'REMOTE'].forEach(function (m) {
-                h += '<option value="' + m + '"' + (config.dbMode === m ? ' selected' : '') + '>' + (m === 'LOCAL' ? '本地SQLite' : '远程数据库') + '</option>';
+                h += '<option value="' + m + '"' + (config.dbMode === m ? ' selected' : '') + '>' + (m === 'LOCAL' ? '本地SQLite' : '远程数据库 (复用系统数据源)') + '</option>';
             });
             h += '</select>';
 
-            // Remote DB config (hidden when LOCAL)
+            // Remote DB config (hidden when LOCAL) - No longer needed if we use system data source!
+            // BUT wait, does the backend support system data source? 
+            // Let's modify the UI to not show the connection info if REMOTE is selected, but instead maybe a hint.
+            // Wait, the backend DataLoadNodeHandler uses JdbcUtils.getConnection(...)
+            // Let's hide the complex connection fields and just show a message or dropdown for data sources.
+            // Actually, if we just want to hide them to make it simple:
             var showRemote = config.dbMode === 'REMOTE' ? 'block' : 'none';
-            h += '<div id="cfg-dl-remote-section" style="display:' + showRemote + ';">';
-            h += '<label style="' + labelStyle + '">数据库类型</label>';
-            h += '<select id="cfg-dl-dbType" style="' + fieldStyle + '">';
-            ['MYSQL', 'POSTGRESQL', 'SQLSERVER'].forEach(function (t) {
-                h += '<option value="' + t + '"' + (config.dbType === t ? ' selected' : '') + '>' + t + '</option>';
-            });
-            h += '</select>';
-            h += '<label style="' + labelStyle + '">主机</label>';
-            h += '<input id="cfg-dl-dbHost" type="text" value="' + esc(config.dbHost || '') + '" style="' + fieldStyle + '" placeholder="127.0.0.1" />';
-            h += '<label style="' + labelStyle + '">端口</label>';
-            h += '<input id="cfg-dl-dbPort" type="number" value="' + (config.dbPort || '') + '" style="' + fieldStyle + '" placeholder="3306" />';
-            h += '<label style="' + labelStyle + '">数据库名</label>';
-            h += '<input id="cfg-dl-dbName" type="text" value="' + esc(config.dbName || '') + '" style="' + fieldStyle + '" />';
-            h += '<label style="' + labelStyle + '">用户名</label>';
-            h += '<input id="cfg-dl-username" type="text" value="' + esc(config.username || '') + '" style="' + fieldStyle + '" />';
-            h += '<label style="' + labelStyle + '">密码</label>';
-            h += '<input id="cfg-dl-password" type="password" value="' + esc(config.password || '') + '" style="' + fieldStyle + '" />';
+            h += '<div id="cfg-dl-remote-section" style="display:' + showRemote + '; padding: 8px; background: #e6f7ff; border: 1px solid #91d5ff; border-radius: 4px; margin-bottom: 8px; font-size: 12px; color: #1890ff;">';
+            h += '已选择远程数据库。系统将自动使用主配置 (application.yml) 中的默认数据源进行连接，无需额外配置。';
             h += '</div>';
 
             // SQL section
@@ -1424,6 +1444,9 @@
         _bindConditionEvents(node, updateConfig, getConfig) {
             var self = this;
 
+            var logicEl = document.getElementById('cfg-cond-logic');
+            if (logicEl) logicEl.addEventListener('change', function () { updateConfig({ logic: this.value }); });
+
             var defaultEl = document.getElementById('cfg-defaultBranch');
             if (defaultEl) defaultEl.addEventListener('input', function () { updateConfig({ defaultBranch: this.value }); });
 
@@ -1456,6 +1479,7 @@
                         if (!branches[idx].condition) branches[idx].condition = {};
                         branches[idx].condition.operator = e.target.value;
                         updateConfig({ branches: branches });
+                        self.renderNodeConfig(node); // Re-render to show/hide value input
                     }
                 });
                 container.addEventListener('click', function (e) {
