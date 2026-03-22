@@ -98,7 +98,8 @@ Pages.tasks = {
             '<button class="btn-design" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#1890ff;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">设计流程</button>' +
             '<button class="btn-edit" data-id="' + t.id + '" data-task=\'' + App.escapeHtml(JSON.stringify(t)) + '\' style="padding:4px 12px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;margin-right:6px;">编辑</button>' +
             startStopBtn +
-            '<button class="btn-exec" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#52c41a;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">执行</button>' +
+            '<button class="btn-debug" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#fa8c16;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">调试</button>' +
+            '<button class="btn-logs" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#13c2c2;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">日志</button>' +
             '<button class="btn-del" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#ff4d4f;color:#fff;cursor:pointer;font-size:12px;">删除</button>' +
             '</td></tr>';
     },
@@ -118,17 +119,14 @@ Pages.tasks = {
                 } catch (err) {
                     App.showToast('解析任务数据失败', 'error');
                 }
-            } else if (btn.classList.contains('btn-exec')) {
-                btn.disabled = true;
-                btn.textContent = '执行中...';
-                try {
-                    const result = await API.post('/task-flow-configs/' + id + '/execute');
-                    Pages.tasks.showExecResult(result);
-                    Pages.tasks.loadData();
-                } catch (err) {
-                    App.showToast('执行失败: ' + err.message, 'error');
-                    Pages.tasks.loadData();
+            } else if (btn.classList.contains('btn-debug')) {
+                if (window.DebugConsole) {
+                    window.DebugConsole.show(id);
+                } else {
+                    App.showToast('调试模块未加载', 'error');
                 }
+            } else if (btn.classList.contains('btn-logs')) {
+                this.showLogsInterface(id);
             } else if (btn.classList.contains('btn-start')) {
                 try {
                     await API.post('/task-flow-configs/' + id + '/start?interval=1000');
@@ -245,6 +243,52 @@ Pages.tasks = {
             '<option value="CONCURRENT"' + (t.executionMode === 'CONCURRENT' ? ' selected' : '') + '>并行</option>' +
             '<option value="BY_DEVICE"' + (t.executionMode === 'BY_DEVICE' ? ' selected' : '') + '>按设备</option>' +
             '</select></div>';
+    },
+
+    showLogsInterface: async function(id) {
+        try {
+            const logs = await API.get('/flow-logs/' + id + '?limit=100');
+            
+            var html = '<div style="margin-bottom:16px;">';
+            if (!logs || logs.length === 0) {
+                html += '<div style="color:#999;text-align:center;padding:20px;">暂无日志记录</div>';
+            } else {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+                html += '<thead><tr style="background:#fafafa;">';
+                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">时间</th>';
+                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">级别</th>';
+                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">节点</th>';
+                html += '<th style="padding:8px;text-align:left;border-bottom:1px solid #e8e8e8;">消息</th>';
+                html += '</tr></thead><tbody>';
+                
+                logs.forEach(log => {
+                    let color = '#333';
+                    if (log.level === 'ERROR') color = '#ff4d4f';
+                    if (log.level === 'WARN') color = '#faad14';
+                    
+                    html += '<tr style="border-bottom:1px solid #f0f0f0;color:' + color + '">';
+                    html += '<td style="padding:8px;white-space:nowrap;">' + App.escapeHtml(log.createdAt || '') + '</td>';
+                    html += '<td style="padding:8px;">' + App.escapeHtml(log.level || '') + '</td>';
+                    html += '<td style="padding:8px;">' + App.escapeHtml(log.nodeId || '-') + '</td>';
+                    html += '<td style="padding:8px;word-break:break-all;">' + App.escapeHtml(log.message || '') + '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+            }
+            html += '</div>';
+
+            App.showModal('查看日志', html, () => {
+                App.hideModal();
+            });
+            // Hide the cancel button since it's just a view
+            const cancelBtn = document.getElementById('modal-cancel-btn');
+            if (cancelBtn) cancelBtn.style.display = 'none';
+            const confirmBtn = document.getElementById('modal-confirm-btn');
+            if (confirmBtn) confirmBtn.textContent = '关闭';
+            
+        } catch (err) {
+            App.showToast('加载日志失败: ' + err.message, 'error');
+        }
     },
 
     showExecResult(result) {

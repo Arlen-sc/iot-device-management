@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Data
 public class FlowExecutionContext {
@@ -17,6 +18,16 @@ public class FlowExecutionContext {
     private String flowName;
     private boolean completed;
     private List<String> executionLog = new ArrayList<>();
+
+    /** Guards against infinite loops (e.g. TCP RECEIVE + CONDITION retry). */
+    private final AtomicInteger executionStepCount = new AtomicInteger(0);
+
+    /**
+     * @return false if the maximum number of node executions has been exceeded
+     */
+    public boolean recordExecutionStep(int maxSteps) {
+        return executionStepCount.incrementAndGet() <= maxSteps;
+    }
 
     public void setVariable(String path, Object value) {
         VariablePathUtils.setValue(variables, path, value);

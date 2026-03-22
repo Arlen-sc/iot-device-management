@@ -26,7 +26,7 @@
         "sendHex": false,
         "waitResponse": true,
         "timeout": 5000,
-        "readMode": "LINE",
+        "readMode": "RAW",
         "outputVariable": "cameraRawData"
       }
     },
@@ -40,14 +40,8 @@
         "name": "步骤1b-拆分并转换",
         "operations": [
           {
-            "op": "SPLIT",
+            "op": "HEX_STRING_TO_DEC_ARRAY",
             "source": "cameraRawData",
-            "target": "hexArray",
-            "params": {"delimiter": ","}
-          },
-          {
-            "op": "HEX_ARRAY_TO_DEC",
-            "source": "hexArray",
             "target": "rs",
             "params": {}
           },
@@ -190,7 +184,7 @@
         "name": "步骤5-判断指令",
         "branches": [
           {
-            "name": "匹配ACK_READY",
+            "name": "包含ACK_READY",
             "condition": {
               "left": "receivedCommand",
               "operator": "contains",
@@ -199,7 +193,27 @@
             "nextNodeId": "n_format_send"
           },
           {
-            "name": "匹配CONFIRM",
+            "name": "整行去空白后等于指定指令",
+            "condition": {
+              "left": "receivedCommand",
+              "operator": "equals_trim",
+              "right": "CMD_GO"
+            },
+            "nextNodeId": "n_format_send"
+          },
+          {
+            "name": "截取后与指定指令相等",
+            "condition": {
+              "left": "receivedCommand",
+              "operator": "substring_equals",
+              "right": "ACK",
+              "substringStart": 0,
+              "substringEnd": 3
+            },
+            "nextNodeId": "n_format_send"
+          },
+          {
+            "name": "匹配CONFIRM前缀",
             "condition": {
               "left": "receivedCommand",
               "operator": "starts_with",
@@ -298,33 +312,20 @@
           {
             "op": "STRIP_PREFIX",
             "source": "deviceResponse",
-            "target": "strippedData",
+            "target": "hexPayload",
             "params": {"prefix": "OK:"}
           },
           {
-            "op": "SPLIT",
-            "source": "strippedData",
-            "target": "responseHexArray",
-            "params": {"delimiter": ","}
-          },
-          {
-            "op": "HEX_ARRAY_TO_DEC",
-            "source": "responseHexArray",
-            "target": "responseDecArray",
+            "op": "HEX_TO_STRING",
+            "source": "hexPayload",
+            "target": "jsonText",
             "params": {}
           },
           {
-            "op": "JSON_BUILD",
-            "source": null,
+            "op": "JSON_PARSE",
+            "source": "jsonText",
             "target": "parsedResult",
-            "params": {
-              "fields": {
-                "status": "success",
-                "values": "${responseDecArray}",
-                "source": "device_response",
-                "originalCommand": "${formattedValues}"
-              }
-            }
+            "params": {}
           }
         ]
       }
@@ -337,7 +338,7 @@
       "y": 300,
       "config": {
         "name": "步骤7-日志和数据记录",
-        "message": "设备交互完成: 摄像头数据=${rs}, 设备返回=${responseDecArray}",
+        "message": "设备交互完成: 摄像头数据=${rs}, 解析后JSON=${parsedResult}",
         "dataPath": "parsedResult",
         "logLevel": "INFO",
         "saveToDb": true,
@@ -353,7 +354,7 @@
       "config": {
         "name": "步骤8-HTTP GET推送",
         "method": "GET",
-        "url": "http://127.0.0.1:8080/api/test/http-receiver/data?v1=${rs[0]}&v2=${rs[1]}&v3=${rs[2]}&v4=${rs[3]}&v5=${rs[4]}&v6=${rs[5]}&result=${parsedResult}",
+        "url": "http://127.0.0.1:18080/api/test/http-receiver/data?v1=${rs[0]}&v2=${rs[1]}&v3=${rs[2]}&v4=${rs[3]}&v5=${rs[4]}&v6=${rs[5]}&status=${parsedResult.status}",
         "contentType": "application/json",
         "timeout": 10000,
         "outputVariable": "httpResponse"

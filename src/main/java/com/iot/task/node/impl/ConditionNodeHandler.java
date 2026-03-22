@@ -8,7 +8,6 @@ import com.iot.util.VariablePathUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +42,7 @@ public class ConditionNodeHandler implements NodeHandler {
                     Map<String, Object> condition = (Map<String, Object>) branch.get("condition");
                     String nextNodeId = (String) branch.get("nextNodeId");
 
-                    if (condition != null && evaluateCondition(condition, context)) {
+                    if (condition != null && evaluateBranchCondition(condition, context)) {
                         log.info("CONDITION branch matched: {}", branchName);
                         context.addLog("Condition matched branch: " + branchName);
                         return NodeResult.branch(Collections.singletonList(nextNodeId));
@@ -65,7 +64,7 @@ public class ConditionNodeHandler implements NodeHandler {
         }
     }
 
-    private boolean evaluateCondition(Map<String, Object> condition, FlowExecutionContext context) {
+    private boolean evaluateBranchCondition(Map<String, Object> condition, FlowExecutionContext context) {
         String leftPath = (String) condition.get("left");
         String operator = (String) condition.get("operator");
         Object rightValue = condition.get("right");
@@ -77,10 +76,10 @@ public class ConditionNodeHandler implements NodeHandler {
             rightValue = VariablePathUtils.getValue(context.getVariables(), rightPath);
         }
 
-        return compare(leftValue, operator, rightValue);
+        return compare(leftValue, operator, rightValue, condition);
     }
 
-    private boolean compare(Object left, String operator, Object right) {
+    private boolean compare(Object left, String operator, Object right, Map<String, Object> condition) {
         if (operator == null) {
             return false;
         }
@@ -98,6 +97,13 @@ public class ConditionNodeHandler implements NodeHandler {
                 return left != null ? !left.toString().equals(right != null ? right.toString() : null) : right != null;
             case "contains":
                 return left != null && left.toString().contains(right != null ? right.toString() : "");
+            case "equals_trim":
+                if (left == null || right == null) {
+                    return false;
+                }
+                return left.toString().trim().equals(right.toString().trim());
+            case "substring_equals":
+                return substringEquals(left, right, condition);
             case "starts_with":
                 return left != null && left.toString().startsWith(right != null ? right.toString() : "");
             case "ends_with":
@@ -150,5 +156,36 @@ public class ConditionNodeHandler implements NodeHandler {
             return num.doubleValue();
         }
         return Double.parseDouble(String.valueOf(value));
+    }
+
+    /**
+     * Compare {@code left.substring(substringStart, substringEnd)} to {@code right} (both as strings).
+     * Bounds default to the full string; indices are clamped to {@code left}'s length.
+     */
+    private boolean substringEquals(Object left, Object right, Map<String, Object> condition) {
+        if (left == null || right == null) {
+            return false;
+        }
+        String ls = left.toString();
+        int start = 0;
+        int end = ls.length();
+        if (condition != null) {
+            if (condition.get("substringStart") instanceof Number n) {
+                start = n.intValue();
+            }
+            if (condition.get("substringEnd") instanceof Number n) {
+                end = n.intValue();
+            }
+        }
+        if (start < 0) {
+            start = 0;
+        }
+        if (end > ls.length()) {
+            end = ls.length();
+        }
+        if (start > end) {
+            return false;
+        }
+        return ls.substring(start, end).equals(right.toString());
     }
 }

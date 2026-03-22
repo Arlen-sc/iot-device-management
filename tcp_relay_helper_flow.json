@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "r_start",
+      "type": "START",
+      "name": "中继任务开始",
+      "x": 80,
+      "y": 200,
+      "config": { "name": "中继任务开始", "description": "仅负责 TCP 监听、收数、原样广播（可配合「连续执行」轮询）" }
+    },
+    {
+      "id": "r_tcp_start",
+      "type": "TCP_SERVER",
+      "name": "启动中继端口",
+      "x": 300,
+      "y": 200,
+      "config": { "port": 9200, "operation": "START" }
+    },
+    {
+      "id": "r_recv",
+      "type": "TCP_SERVER",
+      "name": "接收一帧",
+      "x": 520,
+      "y": 200,
+      "config": {
+        "port": 9200,
+        "operation": "RECEIVE",
+        "timeout": 60000,
+        "outputVariable": "relayIn"
+      }
+    },
+    {
+      "id": "r_broadcast",
+      "type": "TCP_SERVER",
+      "name": "广播给当前连接",
+      "x": 740,
+      "y": 200,
+      "config": {
+        "port": 9200,
+        "operation": "BROADCAST",
+        "sendData": "${relayIn}",
+        "sendHex": false
+      }
+    },
+    {
+      "id": "r_stop",
+      "type": "TCP_SERVER",
+      "name": "停止中继",
+      "x": 960,
+      "y": 200,
+      "config": { "port": 9200, "operation": "STOP" }
+    },
+    {
+      "id": "r_end",
+      "type": "END",
+      "name": "结束",
+      "x": 1180,
+      "y": 200,
+      "config": { "name": "结束" }
+    }
+  ],
+  "edges": [
+    { "id": "re1", "source": "r_start", "target": "r_tcp_start" },
+    { "id": "re2", "source": "r_tcp_start", "target": "r_recv" },
+    { "id": "re3", "source": "r_recv", "target": "r_broadcast" },
+    { "id": "re4", "source": "r_broadcast", "target": "r_stop" },
+    { "id": "re5", "source": "r_stop", "target": "r_end" }
+  ],
+  "variables": [
+    { "name": "relayIn", "defaultValue": "" }
+  ]
+}

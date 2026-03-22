@@ -9,6 +9,7 @@ const Router = {
         '/operations': 'operations',
         '/alerts': 'alerts',
         '/data-bridges': 'dataBridges',
+        '/data-sources': 'dataSources',
     },
 
     init() {

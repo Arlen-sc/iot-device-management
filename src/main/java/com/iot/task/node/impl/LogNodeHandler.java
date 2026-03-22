@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * LOG node - records data to execution log and saves to SQLite database.
@@ -86,10 +87,10 @@ public class LogNodeHandler implements NodeHandler {
                 default -> log.info("LOG node '{}': {}", node.getName(), message);
             }
 
-            // Save to SQLite database
+            // Save to SQLite database asynchronously to avoid blocking the flow execution
             if (saveToDb) {
-                saveToDatabase(node, context, logLevel, message, data);
-                context.addLog("Log entry saved to database (flow_execution_log)");
+                CompletableFuture.runAsync(() -> saveToDatabase(node, context, logLevel, message, data));
+                context.addLog("Log entry async saved to database (flow_execution_log)");
             }
 
             // Store in variable
@@ -109,7 +110,7 @@ public class LogNodeHandler implements NodeHandler {
                                  String level, String message, Object data) {
         try {
             FlowExecutionLog logRecord = new FlowExecutionLog();
-            logRecord.setFlowConfigId(context.getFlowConfigId() != null ? Long.valueOf(context.getFlowConfigId()) : null);
+            logRecord.setFlowConfigId(parseFlowConfigId(context.getFlowConfigId()));
             logRecord.setFlowName(context.getFlowName());
             logRecord.setNodeId(node.getId());
             logRecord.setNodeName(node.getName());
@@ -151,6 +152,17 @@ public class LogNodeHandler implements NodeHandler {
         if (obj instanceof Boolean b) return b;
         if (obj instanceof String s) return "true".equalsIgnoreCase(s);
         return def;
+    }
+
+    private static Long parseFlowConfigId(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(raw);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private static String abbreviate(String s, int max) {

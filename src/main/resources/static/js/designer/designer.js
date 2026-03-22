@@ -33,9 +33,9 @@
     const NODE_CATEGORIES = [
         { key: 'flow',   label: '流程控制', types: ['START', 'END', 'DELAY'] },
         { key: 'logic',  label: '逻辑判断', types: ['CONDITION', 'VARIABLE', 'DEDUP_FILTER'] },
-        { key: 'data',   label: '数据处理', types: ['DATA_EXTRACT', 'DATA_FILTER', 'DATA_TRANSFORM', 'DATA_LOAD', 'SCRIPT', 'LOG'] },
+        { key: 'data',   label: '数据处理', types: ['DATA_LOAD', 'SCRIPT', 'LOG'] },
         { key: 'device', label: '设备控制', types: ['DEVICE_OPERATION'] },
-        { key: 'comm',   label: '通信集成', types: ['TCP_LISTEN', 'TCP_CLIENT', 'TCP_SERVER', 'SQL_QUERY', 'HTTP_REQUEST', 'PLC_WRITE'] },
+        { key: 'comm',   label: '通信集成', types: ['TCP_CLIENT', 'TCP_SERVER', 'HTTP_REQUEST', 'PLC_WRITE'] },
     ];
 
     // -----------------------------------------------------------------
@@ -602,8 +602,14 @@
                 execBtn.textContent = '执行中...';
             }
             try {
-                var result = await API.post('/task-flow-configs/' + this.taskId + '/execute');
-                Pages.tasks.showExecResult(result);
+                if (window.DebugConsole) {
+                    window.DebugConsole.show(this.taskId);
+                } else {
+                    var result = await API.post('/task-flow-configs/' + this.taskId + '/execute');
+                    if (window.Pages && window.Pages.tasks) {
+                        window.Pages.tasks.showExecResult(result);
+                    }
+                }
             } catch (e) {
                 App.showToast('执行失败: ' + e.message, 'error');
             } finally {
@@ -860,15 +866,16 @@
             h += '<label style="' + labelStyle + '">分支条件</label>';
             h += '<div id="cfg-branches">';
             branches.forEach(function (br, idx) {
+                var cond = br.condition || {};
                 h += '<div class="branch-row" data-idx="' + idx + '" style="border:1px solid #e8e8e8;border-radius:4px;padding:8px;margin-bottom:6px;background:#fafafa;">';
                 h += '<input class="br-name" type="text" value="' + esc(br.name || '') + '" placeholder="分支名称" style="' + fieldStyle + 'margin-bottom:4px;" />';
-                h += '<input class="br-variable" type="text" value="' + esc(br.variable || '') + '" placeholder="变量路径" style="' + fieldStyle + 'margin-bottom:4px;" />';
+                h += '<input class="br-variable" type="text" value="' + esc(cond.left || '') + '" placeholder="变量路径" style="' + fieldStyle + 'margin-bottom:4px;" />';
                 h += '<select class="br-operator" style="' + fieldStyle + 'margin-bottom:4px;">';
                 ['==', '!=', '>', '<', '>=', '<=', 'contains', 'starts_with', 'ends_with', 'array_length_gte', 'array_length_gt', 'not_null', 'is_null'].forEach(function (op) {
-                    h += '<option value="' + op + '"' + (br.operator === op ? ' selected' : '') + '>' + esc(op) + '</option>';
+                    h += '<option value="' + op + '"' + (cond.operator === op ? ' selected' : '') + '>' + esc(op) + '</option>';
                 });
                 h += '</select>';
-                h += '<input class="br-value" type="text" value="' + esc(br.value || '') + '" placeholder="比较值" style="' + fieldStyle + 'margin-bottom:4px;" />';
+                h += '<input class="br-value" type="text" value="' + esc(cond.right || '') + '" placeholder="比较值" style="' + fieldStyle + 'margin-bottom:4px;" />';
                 h += '<button class="br-remove" data-idx="' + idx + '" style="' + smallBtn + 'background:#ff4d4f;color:#fff;">移除</button>';
                 h += '</div>';
             });
@@ -995,78 +1002,10 @@
             h += '<input id="cfg-dl-password" type="password" value="' + esc(config.password || '') + '" style="' + fieldStyle + '" />';
             h += '</div>';
 
-            // Table and operation
-            h += '<label style="' + labelStyle + '">目标表名</label>';
-            h += '<input id="cfg-dl-tableName" type="text" value="' + esc(config.tableName || '') + '" style="' + fieldStyle + '" placeholder="device_data" />';
-
-            h += '<label style="' + labelStyle + '">操作类型</label>';
-            h += '<select id="cfg-dl-operation" style="' + fieldStyle + '">';
-            [['INSERT','插入'], ['UPDATE','更新'], ['UPSERT','插入或更新']].forEach(function (op) {
-                h += '<option value="' + op[0] + '"' + (config.operation === op[0] ? ' selected' : '') + '>' + op[0] + ' (' + op[1] + ')</option>';
-            });
-            h += '</select>';
-
-            // ID strategy
-            h += '<label style="' + labelStyle + '">主键字段名</label>';
-            h += '<input id="cfg-dl-idField" type="text" value="' + esc(config.idField || 'id') + '" style="' + fieldStyle + '" />';
-            h += '<label style="' + labelStyle + '">主键策略</label>';
-            h += '<select id="cfg-dl-idStrategy" style="' + fieldStyle + '">';
-            [['AUTO_INCREMENT','自增'], ['ASSIGN_ID','雪花ID'], ['VARIABLE','变量指定'], ['NONE','不设主键']].forEach(function (s) {
-                h += '<option value="' + s[0] + '"' + (config.idStrategy === s[0] ? ' selected' : '') + '>' + s[0] + ' (' + s[1] + ')</option>';
-            });
-            h += '</select>';
-            var showIdVar = config.idStrategy === 'VARIABLE' ? 'block' : 'none';
-            h += '<div id="cfg-dl-idvar-section" style="display:' + showIdVar + ';">';
-            h += '<label style="' + labelStyle + '">ID变量路径</label>';
-            h += '<input id="cfg-dl-idVariable" type="text" value="' + esc(config.idVariable || '') + '" style="' + fieldStyle + '" placeholder="${myId}" />';
-            h += '</div>';
-
-            // UPDATE condition
-            var showCond = (config.operation === 'UPDATE') ? 'block' : 'none';
-            h += '<div id="cfg-dl-cond-section" style="display:' + showCond + ';">';
-            h += '<label style="' + labelStyle + '">WHERE条件</label>';
-            h += '<input id="cfg-dl-updateCondition" type="text" value="' + esc(config.updateCondition || '') + '" style="' + fieldStyle + '" placeholder="id = ${recordId}" />';
-            h += '<p style="font-size:11px;color:#888;margin-top:2px;">支持 ${变量} 占位符</p>';
-            h += '</div>';
-
-            // Write mode toggle
-            var writeMode = config.writeMode || 'FIELD_MAPPING';
-            h += '<label style="' + labelStyle + '">数据写入方式</label>';
-            h += '<select id="cfg-dl-writeMode" style="' + fieldStyle + '">';
-            h += '<option value="FIELD_MAPPING"' + (writeMode === 'FIELD_MAPPING' ? ' selected' : '') + '>字段映射</option>';
-            h += '<option value="SQL"' + (writeMode === 'SQL' ? ' selected' : '') + '>直接SQL</option>';
-            h += '</select>';
-
-            // SQL mode section
-            var showSql = writeMode === 'SQL' ? 'block' : 'none';
-            h += '<div id="cfg-dl-sql-section" style="display:' + showSql + ';">';
+            // SQL section
             h += '<label style="' + labelStyle + '">SQL语句</label>';
             h += '<textarea id="cfg-dl-sql" rows="4" style="' + fieldStyle + 'resize:vertical;font-family:monospace;font-size:12px;" placeholder="INSERT INTO table (col) VALUES (${var})">' + esc(config.sql || '') + '</textarea>';
-            h += '<p style="font-size:11px;color:#888;margin-top:2px;">支持 ${变量名} 占位符, 支持INSERT/UPDATE/DELETE</p>';
-            h += '</div>';
-
-            // Field mappings (hidden when SQL mode)
-            var showFields = writeMode === 'FIELD_MAPPING' ? 'block' : 'none';
-            h += '<div id="cfg-dl-fields-section" style="display:' + showFields + ';">';
-            var fields = config.fields || [];
-            h += '<label style="' + labelStyle + '">字段映射</label>';
-            h += '<div id="cfg-dl-fields">';
-            h += '<div style="display:flex;gap:4px;margin-bottom:4px;font-size:11px;color:#888;"><span style="flex:2;">列名</span><span style="flex:3;">值 (支持${变量})</span><span style="flex:1;">类型</span><span style="width:36px;"></span></div>';
-            fields.forEach(function (f, idx) {
-                h += '<div class="dl-field-row" data-idx="' + idx + '" style="display:flex;gap:4px;margin-bottom:4px;align-items:center;">';
-                h += '<input class="dl-col" type="text" value="' + esc(f.column || '') + '" style="' + fieldStyle + 'flex:2;" placeholder="列名" />';
-                h += '<input class="dl-val" type="text" value="' + esc(f.value || '') + '" style="' + fieldStyle + 'flex:3;" placeholder="${variable}" />';
-                h += '<select class="dl-type" style="' + fieldStyle + 'flex:1;">';
-                ['AUTO','STRING','INTEGER','DOUBLE','BOOLEAN','JSON'].forEach(function (t) {
-                    h += '<option value="' + t + '"' + (f.type === t ? ' selected' : '') + '>' + t + '</option>';
-                });
-                h += '</select>';
-                h += '<button class="dl-remove" data-idx="' + idx + '" style="' + smallBtn + 'background:#ff4d4f;color:#fff;width:36px;">X</button>';
-                h += '</div>';
-            });
-            h += '</div>';
-            h += '<button id="cfg-dl-add-field" style="' + smallBtn + 'background:#1890ff;color:#fff;margin-top:4px;">+ 添加字段</button>';
-            h += '</div>';
+            h += '<p style="font-size:11px;color:#888;margin-top:2px;">支持 ${变量名} 占位符, 支持INSERT/UPDATE/DELETE/SELECT</p>';
 
             // Output variable
             h += '<label style="' + labelStyle + '">输出变量名</label>';
@@ -1502,9 +1441,12 @@
                     var branches = cfg.branches || [];
                     var idx = parseInt(row.dataset.idx, 10);
                     if (!branches[idx]) return;
+                    
+                    if (!branches[idx].condition) branches[idx].condition = {};
+                    
                     if (e.target.classList.contains('br-name'))     branches[idx].name     = e.target.value;
-                    if (e.target.classList.contains('br-variable')) branches[idx].variable = e.target.value;
-                    if (e.target.classList.contains('br-value'))    branches[idx].value    = e.target.value;
+                    if (e.target.classList.contains('br-variable')) branches[idx].condition.left = e.target.value;
+                    if (e.target.classList.contains('br-value'))    branches[idx].condition.right = e.target.value;
                     updateConfig({ branches: branches });
                 });
                 container.addEventListener('change', function (e) {
@@ -1515,7 +1457,8 @@
                     var branches = cfg.branches || [];
                     var idx = parseInt(row.dataset.idx, 10);
                     if (branches[idx]) {
-                        branches[idx].operator = e.target.value;
+                        if (!branches[idx].condition) branches[idx].condition = {};
+                        branches[idx].condition.operator = e.target.value;
                         updateConfig({ branches: branches });
                     }
                 });
@@ -1535,7 +1478,7 @@
                 addBtn.addEventListener('click', function () {
                     var cfg = getConfig();
                     var branches = cfg.branches || [];
-                    branches.push({ name: '', variable: '', operator: '==', value: '' });
+                    branches.push({ name: '', condition: { left: '', operator: '==', right: '' } });
                     updateConfig({ branches: branches });
                     self.renderNodeConfig(node);
                 });
@@ -1714,10 +1657,6 @@
 
             // Simple text/select fields
             var simpleIds = {
-                'cfg-dl-tableName': 'tableName',
-                'cfg-dl-idField': 'idField',
-                'cfg-dl-idVariable': 'idVariable',
-                'cfg-dl-updateCondition': 'updateCondition',
                 'cfg-dl-outputVar': 'outputVariable',
                 'cfg-dl-dbHost': 'dbHost',
                 'cfg-dl-dbName': 'dbName',
@@ -1734,16 +1673,6 @@
             var portEl = document.getElementById('cfg-dl-dbPort');
             if (portEl) portEl.addEventListener('input', function () { updateConfig({ dbPort: parseInt(this.value, 10) || 0 }); });
 
-            // Write mode toggle
-            var writeModeEl = document.getElementById('cfg-dl-writeMode');
-            if (writeModeEl) writeModeEl.addEventListener('change', function () {
-                updateConfig({ writeMode: this.value });
-                var sqlSec = document.getElementById('cfg-dl-sql-section');
-                var fieldsSec = document.getElementById('cfg-dl-fields-section');
-                if (sqlSec) sqlSec.style.display = this.value === 'SQL' ? 'block' : 'none';
-                if (fieldsSec) fieldsSec.style.display = this.value === 'FIELD_MAPPING' ? 'block' : 'none';
-            });
-
             // SQL textarea
             var sqlEl = document.getElementById('cfg-dl-sql');
             if (sqlEl) sqlEl.addEventListener('input', function () { updateConfig({ sql: this.value }); });
@@ -1758,64 +1687,6 @@
 
             var dbTypeEl = document.getElementById('cfg-dl-dbType');
             if (dbTypeEl) dbTypeEl.addEventListener('change', function () { updateConfig({ dbType: this.value }); });
-
-            var opEl = document.getElementById('cfg-dl-operation');
-            if (opEl) opEl.addEventListener('change', function () {
-                updateConfig({ operation: this.value });
-                var condSec = document.getElementById('cfg-dl-cond-section');
-                if (condSec) condSec.style.display = this.value === 'UPDATE' ? 'block' : 'none';
-            });
-
-            var idStratEl = document.getElementById('cfg-dl-idStrategy');
-            if (idStratEl) idStratEl.addEventListener('change', function () {
-                updateConfig({ idStrategy: this.value });
-                var idVarSec = document.getElementById('cfg-dl-idvar-section');
-                if (idVarSec) idVarSec.style.display = this.value === 'VARIABLE' ? 'block' : 'none';
-            });
-
-            // Field mappings (column, value, type)
-            var container = document.getElementById('cfg-dl-fields');
-            if (container) {
-                container.addEventListener('input', function (e) {
-                    var row = e.target.closest('.dl-field-row');
-                    if (!row) return;
-                    var cfg = getConfig();
-                    var fields = cfg.fields || [];
-                    var idx = parseInt(row.dataset.idx, 10);
-                    if (!fields[idx]) return;
-                    if (e.target.classList.contains('dl-col')) fields[idx].column = e.target.value;
-                    if (e.target.classList.contains('dl-val')) fields[idx].value  = e.target.value;
-                    updateConfig({ fields: fields });
-                });
-                container.addEventListener('change', function (e) {
-                    if (!e.target.classList.contains('dl-type')) return;
-                    var row = e.target.closest('.dl-field-row');
-                    if (!row) return;
-                    var cfg = getConfig();
-                    var fields = cfg.fields || [];
-                    var idx = parseInt(row.dataset.idx, 10);
-                    if (fields[idx]) fields[idx].type = e.target.value;
-                    updateConfig({ fields: fields });
-                });
-                container.addEventListener('click', function (e) {
-                    if (!e.target.classList.contains('dl-remove')) return;
-                    var cfg = getConfig();
-                    var fields = cfg.fields || [];
-                    fields.splice(parseInt(e.target.dataset.idx, 10), 1);
-                    updateConfig({ fields: fields });
-                    self.renderNodeConfig(node);
-                });
-            }
-            var addBtn = document.getElementById('cfg-dl-add-field');
-            if (addBtn) {
-                addBtn.addEventListener('click', function () {
-                    var cfg = getConfig();
-                    var fields = cfg.fields || [];
-                    fields.push({ column: '', value: '', type: 'AUTO' });
-                    updateConfig({ fields: fields });
-                    self.renderNodeConfig(node);
-                });
-            }
         },
 
         // -- DEVICE_OPERATION events

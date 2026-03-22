@@ -127,6 +127,20 @@ CREATE TABLE IF NOT EXISTS data_bridge (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Data Source
+CREATE TABLE IF NOT EXISTS data_source (
+    id INTEGER PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    url TEXT NOT NULL,
+    username VARCHAR(100),
+    password VARCHAR(100),
+    driver_class VARCHAR(200),
+    status INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Seed Data: Device Categories
 INSERT OR IGNORE INTO device_category (code, name, sort_order, description) VALUES
     ('SENSORS', 'Sensors', 1, 'Environmental and industrial sensors'),

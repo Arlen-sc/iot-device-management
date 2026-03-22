@@ -157,6 +157,20 @@ public class ScriptNodeHandler implements NodeHandler {
                 return hexToDec(sourceValue);
             }
 
+            case "HEX_STRING_TO_DEC_ARRAY" -> {
+                String hex = String.valueOf(sourceValue).replaceAll("\\s+", "");
+                if (hex.startsWith("0x") || hex.startsWith("0X")) {
+                    hex = hex.substring(2);
+                }
+                List<Long> result = new ArrayList<>();
+                for (int i = 0; i < hex.length(); i += 2) {
+                    if (i + 1 < hex.length()) {
+                        result.add(Long.parseLong(hex.substring(i, i + 2), 16));
+                    }
+                }
+                return result;
+            }
+
             case "DEC_ARRAY_TO_HEX" -> {
                 if (sourceValue instanceof List<?> list) {
                     StringBuilder sb = new StringBuilder();
