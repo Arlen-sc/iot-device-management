@@ -368,42 +368,48 @@ Pages.tasks = {
                     // 设置当前事件项为选中状态
                     item.style.background = '#e6f7ff';
                     
+                    const logContainer = document.querySelector('#modal-overlay .modal-body > div > div:nth-child(2)');
+                    if (!logContainer) return;
+                    
                     // 获取当前事件的日志
                     const eventId = item.dataset.eventId;
                     const event = events[eventId];
                     
                     // 更新右侧日志内容
-                    const logContainer = document.querySelector('#modal-overlay .modal .modal-body > div > div:nth-child(2)');
-                    if (logContainer) {
-                        // 保留顶部的标题和按钮
-                        const header = logContainer.querySelector('div:first-child');
-                        if (header) {
-                            logContainer.innerHTML = '';
-                            logContainer.appendChild(header);
-                            logContainer.innerHTML += this.generateLogTable(event.logs);
-                        }
+                    // 保留顶部的标题和按钮
+                    const header = logContainer.querySelector('div:first-child');
+                    if (header) {
+                        logContainer.innerHTML = '';
+                        logContainer.appendChild(header);
+                        logContainer.innerHTML += this.generateLogTable(event.logs);
                     }
                 });
             });
 
             if (!this._logRefreshHandler) {
                 this._logRefreshHandler = () => {
-                    App.hideModal();
-                    this.showLogsInterface(id);
+                    const id = document.getElementById('log-refresh-btn').dataset.id;
+                    if (id) {
+                        App.hideModal();
+                        this.showLogsInterface(id);
+                    }
                 };
             }
             if (!this._logClearHandler) {
                 this._logClearHandler = () => {
-                    App.confirm('确定要清空该任务的所有日志吗？', async () => {
-                        try {
-                            await API.del('/flow-logs/' + id);
-                            App.showToast('日志已清空', 'success');
-                            App.hideModal();
-                            this.showLogsInterface(id);
-                        } catch (e) {
-                            App.showToast('清空失败: ' + e.message, 'error');
-                        }
-                    });
+                    const id = document.getElementById('log-clear-btn').dataset.id;
+                    if (id) {
+                        App.confirm('确定要清空该任务的所有日志吗？', async () => {
+                            try {
+                                await API.del('/flow-logs/' + id);
+                                App.showToast('日志已清空', 'success');
+                                App.hideModal();
+                                this.showLogsInterface(id);
+                            } catch (e) {
+                                App.showToast('清空失败: ' + e.message, 'error');
+                            }
+                        });
+                    }
                 };
             }
 
@@ -411,10 +417,12 @@ Pages.tasks = {
             const clearBtn = document.getElementById('log-clear-btn');
             
             if (refreshBtn) {
+                refreshBtn.dataset.id = id;
                 refreshBtn.removeEventListener('click', this._logRefreshHandler);
                 refreshBtn.addEventListener('click', this._logRefreshHandler);
             }
             if (clearBtn) {
+                clearBtn.dataset.id = id;
                 clearBtn.removeEventListener('click', this._logClearHandler);
                 clearBtn.addEventListener('click', this._logClearHandler);
             }
