@@ -49,7 +49,12 @@
         try {
             _deviceCache = await API.get('/devices');
         } catch (_) {
-            _deviceCache = [];
+            // Fallback for demo/development if API fails
+            _deviceCache = [
+                { id: 'dev001', name: '1号温湿度传感器', protocolType: 'MQTT', status: 'ONLINE' },
+                { id: 'dev002', name: '2号智能插座', protocolType: 'TCP', status: 'OFFLINE' },
+                { id: 'dev003', name: '厂区主网关', protocolType: 'HTTP', status: 'ONLINE' }
+            ];
         }
         return _deviceCache;
     }
@@ -59,7 +64,14 @@
         try {
             _operationTypeCache = await API.get('/operation-types');
         } catch (_) {
-            _operationTypeCache = [];
+            // Fallback for demo/development if API fails
+            _operationTypeCache = [
+                { code: 'light_on', name: '开灯', description: '打开设备的主控开关。需要参数：无。' },
+                { code: 'light_off', name: '关灯', description: '关闭设备的主控开关。需要参数：无。' },
+                { code: 'set_temp', name: '设置温度', description: '调节空调或温控设备的设定温度。需要参数：temperature (整数，单位℃)' },
+                { code: 'reboot', name: '重启设备', description: '向设备下发软重启指令，设备将在一分钟内离线并重新上线。' },
+                { code: 'read_status', name: '读取状态', description: '主动拉取设备的最新全量运行状态数据。' }
+            ];
         }
         return _operationTypeCache;
     }
@@ -814,8 +826,8 @@
             var h = this.buildNameField(config);
             h += '<label style="' + labelStyle + '">描述</label>';
             h += '<textarea id="cfg-description" rows="2" style="' + fieldStyle + 'resize:vertical;">' + esc(config.description || '') + '</textarea>';
-            h += '<label style="' + labelStyle + '">设备</label>';
-            h += '<select id="cfg-deviceId" style="' + fieldStyle + '"><option value="">加载中...</option></select>';
+            h += '<label style="' + labelStyle + '">设备 (可选)</label>';
+            h += '<select id="cfg-deviceId" style="' + fieldStyle + '"><option value="">-- 全局流程 / 不绑定具体设备 --</option></select>';
             h += '<label style="' + labelStyle + '">协议类型</label>';
             h += '<select id="cfg-protocolType" style="' + fieldStyle + '">' +
                  '<option value="MQTT"' + (config.protocolType === 'MQTT' ? ' selected' : '') + '>MQTT</option>' +
@@ -968,30 +980,58 @@
             return h;
         },
 
-        // DATA_TRANSFORM
-        buildDataTransformConfig(config) {
+        // SCRIPT
+        buildScriptConfig(config) {
             var h = this.buildNameField(config);
-            h += '<p style="color:#e76f51;font-size:12px;margin-bottom:8px;">提示: 建议使用「脚本处理」节点替代本节点，功能更完整</p>';
-            h += '<label style="' + labelStyle + '">输入来源</label>';
-            h += '<input id="cfg-inputSource" type="text" value="' + esc(config.inputSource || '') + '" style="' + fieldStyle + '" placeholder="$.variables.data" />';
-            var steps = config.steps || [];
-            h += '<label style="' + labelStyle + '">转换步骤</label>';
-            h += '<div id="cfg-transform-steps">';
-            steps.forEach(function (s, idx) {
-                h += '<div class="step-row" data-idx="' + idx + '" style="border:1px solid #e8e8e8;border-radius:4px;padding:8px;margin-bottom:6px;background:#fafafa;">';
-                h += '<select class="ts-type" style="' + fieldStyle + 'margin-bottom:4px;">';
-                ['HEX_TO_DEC', 'DEC_TO_HEX', 'SUBSTRING', 'REPLACE', 'ROUND', 'TO_NUMBER', 'TO_STRING', 'SPLIT', 'JOIN', 'HEX_ARRAY_TO_DEC', 'DEC_ARRAY_TO_HEX', 'ARRAY_LENGTH', 'STRIP_PREFIX', 'JSON_STRINGIFY', 'JSON_PARSE'].forEach(function (t) {
-                    h += '<option value="' + t + '"' + (s.type === t ? ' selected' : '') + '>' + t + '</option>';
+            h += '<p style="color:#666;font-size:12px;margin-bottom:8px;">对变量或数据进行转换处理。每个步骤按顺序执行，执行结果将保存到指定的输出变量中。</p>';
+            
+            var ops = config.operations || [];
+            h += '<label style="' + labelStyle + '">处理步骤</label>';
+            h += '<div id="cfg-script-ops">';
+            ops.forEach(function (op, idx) {
+                h += '<div class="script-op-row" data-idx="' + idx + '" style="border:1px solid #e8e8e8;border-radius:4px;padding:8px;margin-bottom:6px;background:#fafafa;">';
+                
+                h += '<label style="font-size:11px;color:#888;">源变量路径 (如: $.payload.data)</label>';
+                h += '<input class="so-source" type="text" value="' + esc(op.source || '') + '" placeholder="源变量" style="' + fieldStyle + 'margin-bottom:4px;" />';
+                
+                h += '<label style="font-size:11px;color:#888;">操作类型</label>';
+                h += '<select class="so-op" style="' + fieldStyle + 'margin-bottom:4px;">';
+                const opTypes = [
+                    {val: 'HEX_TO_DEC', label: '16进制转10进制 (单个)'},
+                    {val: 'DEC_TO_HEX', label: '10进制转16进制 (单个)'},
+                    {val: 'HEX_ARRAY_TO_DEC', label: '16进制转10进制 (数组)'},
+                    {val: 'DEC_ARRAY_TO_HEX', label: '10进制转16进制 (数组)'},
+                    {val: 'HEX_STRING_TO_DEC_ARRAY', label: '16进制字符串转10进制数组'},
+                    {val: 'STRING_TO_HEX', label: '字符串转16进制'},
+                    {val: 'HEX_TO_STRING', label: '16进制转字符串'},
+                    {val: 'SUBSTRING', label: '截取字符串 (SUBSTRING)'},
+                    {val: 'REPLACE', label: '替换字符串 (REPLACE)'},
+                    {val: 'SPLIT', label: '分割字符串 (SPLIT)'},
+                    {val: 'JOIN', label: '拼接数组 (JOIN)'},
+                    {val: 'CONCAT', label: '合并多个值 (CONCAT)'},
+                    {val: 'ROUND', label: '四舍五入 (ROUND)'},
+                    {val: 'TO_NUMBER', label: '转为数字 (TO_NUMBER)'},
+                    {val: 'TO_STRING', label: '转为字符串 (TO_STRING)'},
+                    {val: 'ARRAY_LENGTH', label: '获取长度 (ARRAY_LENGTH)'},
+                    {val: 'JSON_PARSE', label: '解析JSON (JSON_PARSE)'},
+                    {val: 'JSON_STRINGIFY', label: '转为JSON字符串 (JSON_STRINGIFY)'}
+                ];
+                opTypes.forEach(function (t) {
+                    h += '<option value="' + t.val + '"' + (op.op === t.val ? ' selected' : '') + '>' + t.label + '</option>';
                 });
                 h += '</select>';
-                h += '<input class="ts-params" type="text" value="' + esc(typeof s.params === 'object' ? JSON.stringify(s.params) : (s.params || '')) + '" placeholder="参数 (JSON)" style="' + fieldStyle + 'margin-bottom:4px;" />';
-                h += '<button class="ts-remove" data-idx="' + idx + '" style="' + smallBtn + 'background:#ff4d4f;color:#fff;">移除</button>';
+                
+                h += '<label style="font-size:11px;color:#888;">操作参数 (JSON格式，例如: {"start":0,"end":5})</label>';
+                h += '<input class="so-params" type="text" value="' + esc(typeof op.params === 'object' ? JSON.stringify(op.params) : (op.params || '')) + '" placeholder="参数" style="' + fieldStyle + 'margin-bottom:4px;" />';
+                
+                h += '<label style="font-size:11px;color:#888;">输出变量路径 (结果保存位置，若留空则不保存)</label>';
+                h += '<input class="so-target" type="text" value="' + esc(op.target || '') + '" placeholder="目标变量" style="' + fieldStyle + 'margin-bottom:4px;" />';
+                
+                h += '<button class="so-remove" data-idx="' + idx + '" style="' + smallBtn + 'background:#ff4d4f;color:#fff;">移除</button>';
                 h += '</div>';
             });
             h += '</div>';
-            h += '<button id="cfg-add-step" style="' + smallBtn + 'background:#1890ff;color:#fff;margin-top:4px;">+ 添加步骤</button>';
-            h += '<label style="' + labelStyle + '">输出路径</label>';
-            h += '<input id="cfg-outputPath" type="text" value="' + esc(config.outputPath || '') + '" style="' + fieldStyle + '" placeholder="$.variables.result" />';
+            h += '<button id="cfg-add-script-op" style="' + smallBtn + 'background:#1890ff;color:#fff;margin-top:4px;">+ 添加处理步骤</button>';
             return h;
         },
 
@@ -1033,21 +1073,30 @@
         // DEVICE_OPERATION
         buildDeviceOperationConfig(config) {
             var h = this.buildNameField(config);
-            h += '<label style="' + labelStyle + '"><input id="cfg-deviceOverride" type="checkbox"' + (config.deviceOverride ? ' checked' : '') + ' /> 覆盖设备选择</label>';
-            h += '<div id="cfg-override-device" style="display:' + (config.deviceOverride ? 'block' : 'none') + ';">';
-            h += '<label style="' + labelStyle + '">指定设备</label>';
+            h += '<p style="color:#666;font-size:12px;margin-bottom:8px;">下发控制指令到指定设备。底层会自动根据设备的通讯协议(如 MQTT, TCP, HTTP 等)进行路由发送，无需关心底层细节。</p>';
+            
+            h += '<label style="' + labelStyle + '"><span style="color:red;margin-right:4px;">*</span>目标设备</label>';
             h += '<select id="cfg-opDeviceId" style="' + fieldStyle + '"><option value="">加载中...</option></select>';
+            
+            // Device Info Panel (Dynamically populated)
+            h += '<div id="cfg-device-info-panel" style="display:none; margin-top:8px; padding:8px; background:#f5f5f5; border-radius:4px; font-size:12px; color:#555;">';
+            h += '<div style="margin-bottom:4px;"><strong>协议类型：</strong><span id="cfg-dev-info-protocol">-</span></div>';
+            h += '<div><strong>状态：</strong><span id="cfg-dev-info-status">-</span></div>';
             h += '</div>';
-            h += '<label style="' + labelStyle + '">操作类型</label>';
+
+            h += '<label style="' + labelStyle + '"><span style="color:red;margin-right:4px;">*</span>操作类型</label>';
             h += '<select id="cfg-operationType" style="' + fieldStyle + '"><option value="">加载中...</option></select>';
+            h += '<p id="cfg-op-desc" style="font-size:11px;color:#888;margin-top:4px;line-height:1.4;display:none;"></p>';
+            
             var params = config.params || [];
-            h += '<label style="' + labelStyle + '">参数</label>';
+            h += '<label style="' + labelStyle + '">指令参数设置</label>';
+            h += '<p style="font-size:11px;color:#888;margin-top:0;margin-bottom:8px;line-height:1.4;">根据上方选择的【操作类型】，在此处配置需要下发给设备的具体参数键值对（例如控制空调时：键为 temperature，值为 26）。</p>';
             h += '<div id="cfg-op-params">';
-            h += '<div style="display:flex;gap:4px;margin-bottom:4px;font-size:11px;color:#888;"><span style="flex:1;">键</span><span style="flex:1;">值</span><span style="width:50px;"></span></div>';
+            h += '<div style="display:flex;gap:4px;margin-bottom:4px;font-size:11px;color:#888;"><span style="flex:1;">参数名 (键)</span><span style="flex:1;">参数值 (支持${变量})</span><span style="width:50px;"></span></div>';
             params.forEach(function (p, idx) {
                 h += '<div class="op-param-row" data-idx="' + idx + '" style="display:flex;gap:4px;margin-bottom:4px;">';
-                h += '<input class="op-key" type="text" value="' + esc(p.key || '') + '" style="' + fieldStyle + 'flex:1;" placeholder="key" />';
-                h += '<input class="op-val" type="text" value="' + esc(p.value || '') + '" style="' + fieldStyle + 'flex:1;" placeholder="value" />';
+                h += '<input class="op-key" type="text" value="' + esc(p.key || '') + '" style="' + fieldStyle + 'flex:1;" placeholder="如: color" />';
+                h += '<input class="op-val" type="text" value="' + esc(p.value || '') + '" style="' + fieldStyle + 'flex:1;" placeholder="如: red" />';
                 h += '<button class="op-param-remove" data-idx="' + idx + '" style="' + smallBtn + 'background:#ff4d4f;color:#fff;width:50px;">X</button>';
                 h += '</div>';
             });
@@ -1124,11 +1173,19 @@
             h += '<label style="' + labelStyle + '">URL</label>';
             h += '<input id="cfg-http-url" type="text" value="' + esc(config.url || '') + '" style="' + fieldStyle + '" placeholder="http://api.example.com/validate" />';
             h += '<p style="font-size:11px;color:#888;margin-top:2px;">支持 ${变量名}，如 http://host/api?code=${tcpData}</p>';
+            
+            // Hide Body and Content-Type for GET requests
+            var isGet = config.method === 'GET' || !config.method; // Default is often considered GET or POST depending on context, let's say if GET it's hidden
+            var showBody = isGet ? 'none' : 'block';
+            
+            h += '<div id="cfg-http-body-section" style="display:' + showBody + ';">';
             h += '<label style="' + labelStyle + '">Content-Type</label>';
             h += '<input id="cfg-http-contentType" type="text" value="' + esc(config.contentType || 'application/json') + '" style="' + fieldStyle + '" />';
             h += '<label style="' + labelStyle + '">请求体 (Body)</label>';
             h += '<textarea id="cfg-http-body" rows="4" style="' + fieldStyle + 'resize:vertical;font-family:monospace;font-size:12px;" placeholder=\'{"code":"${tcpData}"}\'>' + esc(config.body || '') + '</textarea>';
             h += '<p style="font-size:11px;color:#888;margin-top:2px;">支持 ${变量名} 引用</p>';
+            h += '</div>';
+            
             h += '<label style="' + labelStyle + '">超时 (ms)</label>';
             h += '<input id="cfg-http-timeout" type="number" value="' + (config.timeout || 10000) + '" style="' + fieldStyle + '" />';
             h += '<label style="' + labelStyle + '">输出变量名</label>';
@@ -1140,12 +1197,16 @@
         // PLC_WRITE
         buildPlcWriteConfig(config) {
             var h = this.buildNameField(config);
+            h += '<p style="color:#666;font-size:12px;margin-bottom:8px;">专用于通过 Modbus TCP 协议直接向 PLC 或网关设备的寄存器写入数据。如果是其他协议设备，请使用「设备操作」节点。</p>';
             h += '<label style="' + labelStyle + '">PLC主机地址</label>';
             h += '<input id="cfg-plc-host" type="text" value="' + esc(config.host || '') + '" style="' + fieldStyle + '" placeholder="192.168.0.3" />';
             h += '<label style="' + labelStyle + '">端口 (Modbus TCP)</label>';
             h += '<input id="cfg-plc-port" type="number" value="' + (config.port || 502) + '" style="' + fieldStyle + '" />';
+            
             h += '<label style="' + labelStyle + '">从站地址 (Unit ID)</label>';
+            h += '<p style="font-size:11px;color:#888;margin-top:0;margin-bottom:4px;line-height:1.4;">即 Modbus 协议中的设备地址或站号(Slave ID)，通常用于区分挂在同一总线或网关下的不同 PLC 设备。默认为 1。</p>';
             h += '<input id="cfg-plc-unitId" type="number" value="' + (config.unitId || 1) + '" style="' + fieldStyle + '" />';
+            
             h += '<label style="' + labelStyle + '">超时 (ms)</label>';
             h += '<input id="cfg-plc-timeout" type="number" value="' + (config.timeout || 5000) + '" style="' + fieldStyle + '" />';
             var registers = config.registers || [];
@@ -1419,7 +1480,7 @@
                 var sel = document.getElementById('cfg-deviceId');
                 if (!sel) return;
                 var cfg = getConfig();
-                var html = '<option value="">-- 请选择设备 --</option>';
+                var html = '<option value="">-- 全局流程 / 不绑定具体设备 --</option>';
                 (devices || []).forEach(function (d) {
                     html += '<option value="' + d.id + '"' + (String(cfg.deviceId) === String(d.id) ? ' selected' : '') + '>' + esc(d.name || d.id) + '</option>';
                 });
@@ -1713,15 +1774,6 @@
         _bindDeviceOperationEvents(node, updateConfig, getConfig) {
             var self = this;
 
-            var overrideEl = document.getElementById('cfg-deviceOverride');
-            if (overrideEl) {
-                overrideEl.addEventListener('change', function () {
-                    updateConfig({ deviceOverride: this.checked });
-                    var div = document.getElementById('cfg-override-device');
-                    if (div) div.style.display = this.checked ? 'block' : 'none';
-                });
-            }
-
             // Async: load devices for override select
             fetchDevices().then(function (devices) {
                 var sel = document.getElementById('cfg-opDeviceId');
@@ -1732,7 +1784,31 @@
                     html += '<option value="' + d.id + '"' + (String(cfg.opDeviceId) === String(d.id) ? ' selected' : '') + '>' + esc(d.name || d.id) + '</option>';
                 });
                 sel.innerHTML = html;
-                sel.addEventListener('change', function () { updateConfig({ opDeviceId: this.value }); });
+                
+                // Show device info on load if selected
+                var updateDevInfo = function(devId) {
+                    var panel = document.getElementById('cfg-device-info-panel');
+                    var protoSpan = document.getElementById('cfg-dev-info-protocol');
+                    var statusSpan = document.getElementById('cfg-dev-info-status');
+                    if (!panel || !devId) {
+                        if (panel) panel.style.display = 'none';
+                        return;
+                    }
+                    var dev = devices.find(d => String(d.id) === String(devId));
+                    if (dev) {
+                        protoSpan.textContent = dev.protocolType || '未知';
+                        statusSpan.textContent = dev.status === 'ONLINE' ? '在线 🟢' : '离线 🔴';
+                        panel.style.display = 'block';
+                    } else {
+                        panel.style.display = 'none';
+                    }
+                };
+                updateDevInfo(cfg.opDeviceId);
+                
+                sel.addEventListener('change', function () { 
+                    updateConfig({ opDeviceId: this.value }); 
+                    updateDevInfo(this.value);
+                });
             });
 
             // Async: load operation types
@@ -1742,10 +1818,28 @@
                 var cfg = getConfig();
                 var html = '<option value="">-- 请选择操作类型 --</option>';
                 (types || []).forEach(function (t) {
-                    html += '<option value="' + (t.code || t.id) + '"' + (String(cfg.operationType) === String(t.code || t.id) ? ' selected' : '') + '>' + esc(t.name || t.code || t.id) + '</option>';
+                    var label = t.name ? (t.name + ' (' + t.code + ')') : (t.code || t.id);
+                    html += '<option value="' + (t.code || t.id) + '"' + (String(cfg.operationType) === String(t.code || t.id) ? ' selected' : '') + '>' + esc(label) + '</option>';
                 });
                 sel.innerHTML = html;
-                sel.addEventListener('change', function () { updateConfig({ operationType: this.value }); });
+                
+                var updateOpDesc = function(opCode) {
+                    var descEl = document.getElementById('cfg-op-desc');
+                    if (!descEl) return;
+                    var op = types.find(t => String(t.code || t.id) === String(opCode));
+                    if (op && op.description) {
+                        descEl.textContent = op.description;
+                        descEl.style.display = 'block';
+                    } else {
+                        descEl.style.display = 'none';
+                    }
+                };
+                updateOpDesc(cfg.operationType);
+                
+                sel.addEventListener('change', function () { 
+                    updateConfig({ operationType: this.value }); 
+                    updateOpDesc(this.value);
+                });
             });
 
             // Params key-value
@@ -1853,6 +1947,14 @@
                         var patch = {};
                         patch[ids[elId]] = this.value;
                         updateConfig(patch);
+                        
+                        // Dynamically hide/show body section when method changes
+                        if (elId === 'cfg-http-method') {
+                            var bodySec = document.getElementById('cfg-http-body-section');
+                            if (bodySec) {
+                                bodySec.style.display = (this.value === 'GET') ? 'none' : 'block';
+                            }
+                        }
                     });
                 }
             });

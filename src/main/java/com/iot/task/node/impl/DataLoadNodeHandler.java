@@ -118,7 +118,7 @@ public class DataLoadNodeHandler implements NodeHandler {
             return dataSource.getConnection();
         } else {
             // Local SQLite for isolated/embedded storage if needed
-            return JdbcUtils.getConnection();
+            return dataSource.getConnection();
         }
     }
 

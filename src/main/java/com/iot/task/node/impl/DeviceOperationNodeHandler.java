@@ -55,7 +55,10 @@ public class DeviceOperationNodeHandler implements NodeHandler {
             }
 
             // Resolve operation type
-            String operationTypeCode = (String) config.get("operationTypeCode");
+            String operationTypeCode = (String) config.get("operationType"); // Frontend uses "operationType"
+            if (operationTypeCode == null) {
+                operationTypeCode = (String) config.get("operationTypeCode"); // Fallback for old configs
+            }
             OperationType operationType = operationTypeService.lambdaQuery()
                     .eq(OperationType::getCode, operationTypeCode)
                     .one();
@@ -103,7 +106,10 @@ public class DeviceOperationNodeHandler implements NodeHandler {
     }
 
     private Device resolveDevice(Map<String, Object> config, FlowExecutionContext context) {
-        Object deviceIdObj = config.get("deviceId");
+        Object deviceIdObj = config.get("opDeviceId"); // Changed to match frontend "opDeviceId"
+        if (deviceIdObj == null) {
+            deviceIdObj = config.get("deviceId"); // Fallback for old configs
+        }
 
         if (deviceIdObj != null) {
             Long deviceId;
