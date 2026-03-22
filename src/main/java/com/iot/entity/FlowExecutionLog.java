@@ -22,6 +22,8 @@ public class FlowExecutionLog {
 
     private String nodeName;
 
+    private String actionType;
+
     private String level;
 
     private String message;

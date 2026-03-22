@@ -413,6 +413,7 @@ Pages.tasks = {
             html += '<thead style="position:sticky;top:0;z-index:1;background:#fafafa;box-shadow:0 1px 2px rgba(0,0,0,0.05);"><tr style="background:#fafafa;">';
             html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:160px;">时间</th>';
             html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:60px;">级别</th>';
+            html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:100px;">事务类型</th>';
             html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;width:120px;">节点</th>';
             html += '<th style="padding:10px 8px;text-align:left;border-bottom:1px solid #e8e8e8;">消息与数据</th>';
             html += '</tr></thead><tbody>';
@@ -448,6 +449,7 @@ Pages.tasks = {
                 else if (log.level === 'INFO') levelBadge = '<span style="background:#e6f7ff;color:#1890ff;padding:2px 6px;border-radius:4px;border:1px solid #91d5ff;font-size:12px;">INFO</span>';
                 
                 html += '<td style="padding:10px 8px;vertical-align:top;">' + levelBadge + '</td>';
+                html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + App.escapeHtml(log.actionType || '-') + '</td>';
                 html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + App.escapeHtml(log.nodeName || log.nodeId || '-') + '</td>';
                 html += '<td style="padding:10px 8px;vertical-align:top;word-break:break-all;">' + 
                         '<div style="line-height:1.5;">' + App.escapeHtml(log.message || '') + '</div>' + 

@@ -115,6 +115,7 @@ public class LogNodeHandler implements NodeHandler {
             logRecord.setEventId(context.getEventId());
             logRecord.setNodeId(node.getId());
             logRecord.setNodeName(node.getName());
+            logRecord.setActionType(node.getType());
             logRecord.setLevel(level);
             logRecord.setMessage(message);
             if (data != null) {

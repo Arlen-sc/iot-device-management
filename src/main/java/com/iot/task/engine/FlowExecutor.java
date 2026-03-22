@@ -98,7 +98,7 @@ public class FlowExecutor {
         if (!result.isSuccess()) {
             log.warn("Node {} failed: {}", node.getName(), result.getErrorMessage());
             context.addLog(String.format("【节点执行失败】节点: %s, 错误信息: %s", node.getName(), result.getErrorMessage()));
-            saveErrorToDb(node, context, result.getErrorMessage());
+            saveErrorToDb(node, nodeType, context, result.getErrorMessage());
             return;
         } else {
              if (result.getResultData() != null) {
@@ -151,7 +151,7 @@ public class FlowExecutor {
         }
     }
 
-    private void saveErrorToDb(FlowNode node, FlowExecutionContext context, String errorMessage) {
+    private void saveErrorToDb(FlowNode node, String nodeType, FlowExecutionContext context, String errorMessage) {
         if (flowExecutionLogMapper == null || context.getFlowConfigId() == null) {
             return;
         }
@@ -163,6 +163,7 @@ public class FlowExecutor {
                 logRecord.setEventId(context.getEventId());
                 logRecord.setNodeId(node.getId());
                 logRecord.setNodeName(node.getName());
+                logRecord.setActionType(nodeType);
                 logRecord.setLevel("ERROR");
                 logRecord.setMessage(errorMessage);
                 logRecord.setCreatedAt(LocalDateTime.now());

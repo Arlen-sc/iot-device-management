@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS flow_execution_log (
     event_id VARCHAR(100),
     node_id VARCHAR(100),
     node_name VARCHAR(200),
+    action_type VARCHAR(50),
     level VARCHAR(20) DEFAULT 'INFO',
     message TEXT,
     data_json TEXT,
