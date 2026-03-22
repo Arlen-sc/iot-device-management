@@ -1,11 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Modal, message, Popconfirm } from 'antd';
+import { Table, Button, Space, Tag, Modal, message, Popconfirm, Card, Typography, Tooltip } from 'antd';
+import { 
+  PlayCircleOutlined, 
+  StopOutlined, 
+  EditOutlined, 
+  DeleteOutlined,
+  CodeOutlined,
+  BugOutlined,
+  PlusOutlined
+} from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import TaskForm from './TaskForm';
 import LogViewer from './LogViewer';
 import DebugConsole from './DebugConsole';
 import dayjs from 'dayjs';
+
+const { Title } = Typography;
 
 const TaskList = () => {
   const [data, setData] = useState([]);
@@ -143,23 +154,37 @@ const TaskList = () => {
         const isRunning = runningMap[record.id];
         return (
           <Space size="small">
-            <Button size="small" type="primary" onClick={() => navigate(`/designer/${record.id}`)}>设计</Button>
-            <Button size="small" onClick={() => { setEditingTask(record); setFormVisible(true); }}>编辑</Button>
+            <Tooltip title="设计流程">
+              <Button type="text" style={{color: '#4f46e5'}} icon={<CodeOutlined />} onClick={() => navigate(`/designer/${record.id}`)} />
+            </Tooltip>
+            <Tooltip title="编辑属性">
+              <Button type="text" icon={<EditOutlined />} onClick={() => { setEditingTask(record); setFormVisible(true); }} />
+            </Tooltip>
             
             {isRunning ? (
-              <Button size="small" danger onClick={() => handleStop(record.id)}>停止</Button>
+              <Tooltip title="停止">
+                <Button type="text" danger icon={<StopOutlined />} onClick={() => handleStop(record.id)} />
+              </Tooltip>
             ) : (
-              <Button size="small" style={{background: '#722ed1', color: '#fff'}} onClick={() => handleStart(record.id)}>启动</Button>
+              <Tooltip title="启动">
+                <Button type="text" style={{color: '#10b981'}} icon={<PlayCircleOutlined />} onClick={() => handleStart(record.id)} />
+              </Tooltip>
             )}
             
             {record.triggerType === 'ONCE' && (
-              <Button size="small" style={{background: '#fa8c16', color: '#fff', borderColor: '#fa8c16'}} onClick={() => { setCurrentTaskId(record.id); setDebugVisible(true); }}>调试</Button>
+              <Tooltip title="调试">
+                <Button type="text" style={{color: '#f59e0b'}} icon={<BugOutlined />} onClick={() => { setCurrentTaskId(record.id); setDebugVisible(true); }} />
+              </Tooltip>
             )}
             
-            <Button size="small" style={{background: '#13c2c2', color: '#fff', borderColor: '#13c2c2'}} onClick={() => { setCurrentTaskId(record.id); setLogsVisible(true); }}>日志</Button>
+            <Tooltip title="日志">
+              <Button type="text" style={{color: '#0ea5e9'}} icon={<CodeOutlined />} onClick={() => { setCurrentTaskId(record.id); setLogsVisible(true); }} />
+            </Tooltip>
             
             <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
-              <Button size="small" danger>删除</Button>
+              <Tooltip title="删除">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           </Space>
         );
@@ -168,19 +193,23 @@ const TaskList = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>任务管理</h2>
-        <Button type="primary" onClick={() => { setEditingTask(null); setFormVisible(true); }}>新建任务</Button>
-      </div>
-      
-      <Table 
-        columns={columns} 
-        dataSource={data} 
-        rowKey="id" 
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-      />
+    <div className="page-container">
+      <Card bordered={false} style={{ borderRadius: 8, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}>
+        <div className="page-header">
+          <Title level={4} style={{ margin: 0, color: '#0f172a' }}>任务管理</Title>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingTask(null); setFormVisible(true); }}>
+            新建任务
+          </Button>
+        </div>
+        
+        <Table 
+          columns={columns} 
+          dataSource={data} 
+          rowKey="id" 
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+        />
+      </Card>
 
       {/* 弹窗组件 */}
       <TaskForm 

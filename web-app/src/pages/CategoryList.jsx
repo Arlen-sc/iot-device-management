@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Popconfirm, message } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, Popconfirm, message, Card, Typography } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import dayjs from 'dayjs';
 
+const { Title } = Typography;
 const { TextArea } = Input;
 
 const CategoryList = () => {
@@ -83,9 +85,9 @@ const CategoryList = () => {
       key: 'action',
       render: (_, record) => (
         <Space size="small">
-          <Button type="link" onClick={() => handleEdit(record)}>编辑</Button>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
           <Popconfirm title="确定要删除该分类吗？" onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" danger>删除</Button>
+            <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       )
@@ -93,19 +95,21 @@ const CategoryList = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>设备分类</h2>
-        <Button type="primary" onClick={handleAdd}>添加分类</Button>
-      </div>
+    <div className="page-container">
+      <Card bordered={false} style={{ borderRadius: 8, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}>
+        <div className="page-header">
+          <Title level={4} style={{ margin: 0, color: '#0f172a' }}>设备分类</Title>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>添加分类</Button>
+        </div>
 
-      <Table 
-        columns={columns} 
-        dataSource={data} 
-        rowKey="id" 
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-      />
+        <Table 
+          columns={columns} 
+          dataSource={data} 
+          rowKey="id" 
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+        />
+      </Card>
 
       <Modal
         title={editingCategory ? '编辑分类' : '添加分类'}

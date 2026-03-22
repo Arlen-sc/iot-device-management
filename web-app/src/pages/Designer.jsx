@@ -6,6 +6,14 @@ import { Snapline } from '@antv/x6-plugin-snapline';
 import { Keyboard } from '@antv/x6-plugin-keyboard';
 import { Selection } from '@antv/x6-plugin-selection';
 import { Button, message, Space, Modal, Drawer } from 'antd';
+import { 
+  ZoomInOutlined, 
+  ZoomOutOutlined, 
+  AimOutlined, 
+  SaveOutlined, 
+  BugOutlined,
+  ArrowLeftOutlined
+} from '@ant-design/icons';
 import api from '../utils/api';
 import NodeForm from './NodeForm';
 import DebugConsole from './DebugConsole';
@@ -214,15 +222,15 @@ const Designer = () => {
       {/* Header */}
       <div className="designer-header">
         <div className="header-left">
-          <Button onClick={() => navigate('/tasks')}>&larr; 返回</Button>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/tasks')}>返回</Button>
           <span className="task-title">{taskName}</span>
         </div>
         <Space>
-          <Button onClick={() => graph?.zoom(-0.1)}>-</Button>
-          <Button onClick={() => graph?.zoom(0.1)}>+</Button>
-          <Button onClick={() => graph?.centerContent()}>⌖</Button>
-          <Button type="primary" onClick={handleSave}>保存</Button>
-          <Button type="primary" style={{background: '#52c41a'}} onClick={() => { handleSave().then(() => setDebugVisible(true)); }}>调试</Button>
+          <Button type="text" icon={<ZoomOutOutlined />} onClick={() => graph?.zoom(-0.1)} />
+          <Button type="text" icon={<ZoomInOutlined />} onClick={() => graph?.zoom(0.1)} />
+          <Button type="text" icon={<AimOutlined />} onClick={() => graph?.centerContent()} />
+          <Button type="default" icon={<SaveOutlined />} onClick={handleSave}>保存</Button>
+          <Button type="primary" style={{background: '#10b981', borderColor: '#10b981'}} icon={<BugOutlined />} onClick={() => { handleSave().then(() => setDebugVisible(true)); }}>调试</Button>
         </Space>
       </div>
 

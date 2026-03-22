@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, Popconfirm, message } from 'antd';
+import { Table, Button, Space, Tag, Modal, Form, Input, Select, Popconfirm, message, Card, Typography } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import dayjs from 'dayjs';
 
+const { Title } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
@@ -96,29 +98,31 @@ const DeviceList = () => {
       key: 'action',
       render: (_, record) => (
         <Space size="small">
-          <Button type="link" onClick={() => handleEdit(record)}>编辑</Button>
-          <Popconfirm title="确定要删除该设备吗？" onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" danger>删除</Button>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
+          <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
+            <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
-      )
-    }
+      ),
+    },
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>设备管理</h2>
-        <Button type="primary" onClick={handleAdd}>添加设备</Button>
-      </div>
-
-      <Table 
-        columns={columns} 
-        dataSource={data} 
-        rowKey="id" 
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-      />
+    <div className="page-container">
+      <Card bordered={false} style={{ borderRadius: 8, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}>
+        <div className="page-header">
+          <Title level={4} style={{ margin: 0, color: '#0f172a' }}>设备管理</Title>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>添加设备</Button>
+        </div>
+        
+        <Table 
+          columns={columns} 
+          dataSource={data} 
+          rowKey="id" 
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+        />
+      </Card>
 
       <Modal
         title={editingDevice ? '编辑设备' : '添加设备'}

@@ -1,54 +1,111 @@
-import { Layout, Menu } from 'antd';
+import React, { useState } from 'react';
+import { Layout, Menu, Button } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   AppstoreOutlined, 
   SettingOutlined, 
-  ApiOutlined,
+  ApiOutlined, 
   DatabaseOutlined,
   AlertOutlined,
-  NodeIndexOutlined
+  DashboardOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
 } from '@ant-design/icons';
-import React from 'react';
 
-const { Header, Content, Sider } = Layout;
+const { Header, Sider, Content } = Layout;
 
 const AppLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-
+  const [collapsed, setCollapsed] = useState(false);
+  
   const menuItems = [
-    { key: '/tasks', icon: <NodeIndexOutlined />, label: '任务流管理' },
-    { key: '/devices', icon: <AppstoreOutlined />, label: '设备管理' },
-    { key: '/categories', icon: <SettingOutlined />, label: '设备分类' },
+    { key: '/tasks', icon: <AppstoreOutlined />, label: '任务流管理' },
+    { key: '/devices', icon: <ApiOutlined />, label: '设备管理' },
+    { key: '/categories', icon: <DatabaseOutlined />, label: '设备分类' },
     { key: '/datasources', icon: <DatabaseOutlined />, label: '数据源管理' },
     { key: '/bridges', icon: <ApiOutlined />, label: '数据桥接' },
     { key: '/alerts', icon: <AlertOutlined />, label: '告警管理' },
+    { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
   ];
-
-  // 计算当前选中的菜单项（兼容带参数的子路由，比如 /designer/1）
-  const selectedKey = menuItems.find(item => location.pathname.startsWith(item.key))?.key || '/tasks';
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="light" width={220} style={{ borderRight: '1px solid #f0f0f0' }}>
-        <div style={{ height: 64, display: 'flex', alignItems: 'center', padding: '0 24px', fontSize: 18, fontWeight: 'bold', color: '#1890ff', borderBottom: '1px solid #f0f0f0' }}>
-          IoT 流程引擎
+      <Sider 
+        collapsible 
+        collapsed={collapsed} 
+        onCollapse={(value) => setCollapsed(value)}
+        width={240}
+        style={{
+          boxShadow: '2px 0 8px 0 rgba(29,35,41,.05)',
+          zIndex: 10
+        }}
+      >
+        <div style={{ 
+          height: 64, 
+          margin: 16, 
+          background: 'rgba(255, 255, 255, 0.1)', 
+          borderRadius: 8,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: collapsed ? 12 : 16,
+          transition: 'all 0.3s'
+        }}>
+          {collapsed ? 'IoT' : 'IoT Device Platform'}
         </div>
-        <Menu
-          mode="inline"
-          selectedKeys={[selectedKey]}
-          style={{ height: 'calc(100% - 64px)', borderRight: 0, padding: '12px 0' }}
+        <Menu 
+          theme="dark" 
+          mode="inline" 
+          selectedKeys={[location.pathname]} 
           items={menuItems}
           onClick={({ key }) => navigate(key)}
+          style={{ borderRight: 0, padding: '0 8px' }}
         />
       </Sider>
       <Layout>
-        <Header style={{ background: '#fff', padding: 0, borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center' }}>
-          <div style={{ padding: '0 24px', fontSize: 16, fontWeight: 500 }}>
-            {menuItems.find(item => item.key === selectedKey)?.label || '详情'}
+        <Header style={{ 
+          padding: '0 24px', 
+          background: '#fff',
+          boxShadow: '0 1px 4px rgba(0,21,41,.08)',
+          display: 'flex',
+          alignItems: 'center',
+          zIndex: 9
+        }}>
+          <Button
+            type="text"
+            icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              fontSize: '16px',
+              width: 64,
+              height: 64,
+              marginLeft: -24
+            }}
+          />
+          <div style={{ flex: 1 }}></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <span style={{ color: '#475569', fontWeight: 500 }}>Admin User</span>
+            <div style={{ 
+              width: 32, 
+              height: 32, 
+              borderRadius: '50%', 
+              background: '#4f46e5', 
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 'bold'
+            }}>A</div>
           </div>
         </Header>
-        <Content style={{ margin: '24px', background: '#fff', borderRadius: 8, minHeight: 280 }}>
+        <Content style={{ 
+          margin: '24px 16px', 
+          overflow: 'initial',
+          minHeight: 280
+        }}>
           {children}
         </Content>
       </Layout>

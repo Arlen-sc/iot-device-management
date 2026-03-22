@@ -2,18 +2,18 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #f0f2f5;
+  background: #f8fafc;
 }
 
 .designer-header {
-  height: 60px;
-  background: #fff;
-  border-bottom: 1px solid #e8e8e8;
+  height: 64px;
+  background: #ffffff;
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px 0 rgba(0,0,0,0.03);
   z-index: 10;
 }
 
@@ -25,8 +25,8 @@
 
 .task-title {
   font-size: 16px;
-  font-weight: bold;
-  color: #333;
+  font-weight: 600;
+  color: #0f172a;
 }
 
 .designer-body {
@@ -36,19 +36,22 @@
 }
 
 .designer-stencil {
-  width: 250px;
-  background: #fff;
-  border-right: 1px solid #e8e8e8;
+  width: 260px;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
   padding: 16px;
   overflow-y: auto;
+  box-shadow: 1px 0 2px 0 rgba(0,0,0,0.03);
+  z-index: 5;
 }
 
 .stencil-group {
   font-size: 12px;
-  font-weight: bold;
-  color: #888;
+  font-weight: 600;
+  color: #64748b;
   margin: 16px 0 8px 0;
   text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .stencil-group:first-child {
@@ -58,29 +61,34 @@
 .stencil-item {
   height: 36px;
   line-height: 34px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
   margin-bottom: 8px;
   text-align: center;
   cursor: grab;
   font-size: 13px;
-  background: #fafafa;
-  transition: all 0.3s;
+  background: #f8fafc;
+  color: #475569;
+  transition: all 0.2s ease;
 }
 
 .stencil-item:hover {
-  border-color: #1890ff;
-  color: #1890ff;
-  box-shadow: 0 2px 4px rgba(24,144,255,0.1);
+  border-color: #4f46e5;
+  color: #4f46e5;
+  background: #eef2ff;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.1);
 }
 
-.stencil-item.start { border-color: #52c41a; color: #52c41a; background: #f6ffed; border-radius: 18px; }
-.stencil-item.end { border-color: #ff4d4f; color: #ff4d4f; background: #fff1f0; border-radius: 18px; }
-.stencil-item.condition { border-color: #faad14; color: #faad14; background: #fffbe6; }
-.stencil-item.script { border-color: #722ed1; color: #722ed1; background: #f9f0ff; }
-.stencil-item.http { border-color: #1890ff; color: #1890ff; background: #e6f7ff; }
+.stencil-item.start { border-color: #10b981; color: #10b981; background: #ecfdf5; border-radius: 18px; }
+.stencil-item.end { border-color: #ef4444; color: #ef4444; background: #fef2f2; border-radius: 18px; }
+.stencil-item.condition { border-color: #f59e0b; color: #f59e0b; background: #fffbeb; }
+.stencil-item.script { border-color: #8b5cf6; color: #8b5cf6; background: #f5f3ff; }
+.stencil-item.http { border-color: #0ea5e9; color: #0ea5e9; background: #f0f9ff; }
 
 .designer-canvas-container {
   flex: 1;
   height: 100%;
+  background-color: #f1f5f9;
+  background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+  background-size: 20px 20px;
 }
