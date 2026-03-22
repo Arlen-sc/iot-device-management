@@ -39,11 +39,15 @@ public class FlowExecutor {
         }
 
         log.info("Starting flow execution from node: {}", startNode.getName());
-        context.addLog("Flow execution started");
+        context.addLog("================ 流程执行开始 ================");
+        context.addLog("流程ID: " + context.getFlowConfigId() + ", 流程名称: " + context.getFlowName());
+        context.addLog("【初始上下文数据】" + abbreviateLogData(context.getVariables().toString()));
 
         executeNode(startNode, flow, context);
 
-        context.addLog("Flow execution finished, completed: " + context.isCompleted());
+        context.addLog("================ 流程执行结束 ================");
+        context.addLog("最终状态: " + (context.isCompleted() ? "成功(Completed)" : "未完成(Incomplete)"));
+        context.addLog("【最终上下文数据】" + abbreviateLogData(context.getVariables().toString()));
         log.info("Flow execution finished, completed: {}", context.isCompleted());
     }
 
@@ -68,27 +72,34 @@ public class FlowExecutor {
         }
 
         log.info("Executing node: {} (type: {})", node.getName(), nodeType);
-        context.addLog("Executing node: " + node.getName() + " (" + nodeType + ")");
+        context.addLog(String.format("【节点执行开始】节点: %s (%s)", node.getName(), nodeType));
+        context.addLog("【节点输入数据】" + abbreviateLogData(context.getVariables().toString()));
 
         NodeResult result;
         try {
             result = handler.execute(node, context);
+            context.addLog(String.format("【节点执行成功】节点: %s", node.getName()));
         } catch (Exception e) {
             log.error("Unexpected error executing node: {}", node.getName(), e);
-            context.addLog("ERROR at node " + node.getName() + ": " + e.getMessage());
+            context.addLog(String.format("【节点执行异常】节点: %s, 错误: %s", node.getName(), e.getMessage()));
             return;
         }
 
         if (result == null) {
-            context.addLog("Node " + node.getName() + " returned null result");
+            context.addLog(String.format("【节点执行警告】节点 %s 返回了空结果", node.getName()));
             return;
         }
 
         if (!result.isSuccess()) {
             log.warn("Node {} failed: {}", node.getName(), result.getErrorMessage());
-            context.addLog("Node " + node.getName() + " failed: " + result.getErrorMessage());
+            context.addLog(String.format("【节点执行失败】节点: %s, 错误信息: %s", node.getName(), result.getErrorMessage()));
             saveErrorToDb(node, context, result.getErrorMessage());
             return;
+        } else {
+             if (result.getData() != null) {
+                 context.addLog("【节点执行结果数据】" + abbreviateLogData(result.getData().toString()));
+             }
+             context.addLog("【节点输出后上下文】" + abbreviateLogData(context.getVariables().toString()));
         }
 
         if (context.isCompleted()) {
@@ -111,11 +122,12 @@ public class FlowExecutor {
         if (nextNodeIds.size() == 1) {
             // Serial execution for single next node
             FlowNode nextNode = flow.findNodeById(nextNodeIds.get(0));
+            context.addLog(String.format("【流程流转】节点 %s -> 节点 %s", node.getName(), nextNode != null ? nextNode.getName() : "null"));
             executeNode(nextNode, flow, context);
         } else {
             // Parallel execution for multiple next nodes
             log.info("Parallel execution of {} branches from node: {}", nextNodeIds.size(), node.getName());
-            context.addLog("Branching into " + nextNodeIds.size() + " parallel paths");
+            context.addLog(String.format("【流程流转】节点 %s 分支执行, 目标节点数: %d", node.getName(), nextNodeIds.size()));
 
             CompletableFuture<?>[] futures = nextNodeIds.stream()
                     .map(nodeId -> {
@@ -152,5 +164,13 @@ public class FlowExecutor {
                 log.error("Failed to save error log to DB: {}", e.getMessage());
             }
         });
+    }
+
+    private String abbreviateLogData(String data) {
+        if (data == null) return "null";
+        if (data.length() > 500) {
+            return data.substring(0, 500) + "... (truncated)";
+        }
+        return data;
     }
 }

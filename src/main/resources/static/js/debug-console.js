@@ -68,15 +68,22 @@ const DebugConsole = {
                     logsEl.innerHTML += '<div style="color:#999;">[SYSTEM] 无日志输出</div>';
                 } else {
                     var logsHtml = '';
-                    logs.forEach((logText, i) => {
+                    logs.forEach((logText) => {
                         var logColor = '#a0e8af';
                         var escaped = App.escapeHtml(logText);
-                        if (escaped.indexOf('ERROR') >= 0 || escaped.indexOf('error') >= 0 || escaped.indexOf('fail') >= 0) {
+                        if (escaped.indexOf('ERROR') >= 0 || escaped.indexOf('error') >= 0 || escaped.indexOf('fail') >= 0 || escaped.indexOf('【节点执行异常】') >= 0 || escaped.indexOf('【节点执行失败】') >= 0) {
                             logColor = '#ff6b6b';
-                        } else if (escaped.indexOf('WARN') >= 0 || escaped.indexOf('warn') >= 0) {
+                        } else if (escaped.indexOf('WARN') >= 0 || escaped.indexOf('warn') >= 0 || escaped.indexOf('【节点执行警告】') >= 0) {
                             logColor = '#ffd93d';
+                        } else if (escaped.indexOf('================') >= 0) {
+                            logColor = '#1890ff';
+                        } else if (escaped.indexOf('【流程流转】') >= 0) {
+                            logColor = '#b37feb';
+                        } else if (escaped.indexOf('【节点执行成功】') >= 0) {
+                            logColor = '#52c41a';
                         }
-                        logsHtml += '<div style="color:' + logColor + ';margin-bottom:4px;word-break:break-all;"><span style="color:#666;margin-right:8px;">[' + (i + 1) + ']</span>' + escaped + '</div>';
+                        
+                        logsHtml += '<div style="color:' + logColor + ';margin-bottom:6px;word-break:break-all;border-bottom:1px dashed #333;padding-bottom:4px;">' + escaped + '</div>';
                     });
                     logsEl.innerHTML = logsHtml;
                 }

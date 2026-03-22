@@ -87,6 +87,11 @@ Pages.tasks = {
             startStopBtn = '<button class="btn-start" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#722ed1;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">启动</button>';
         }
 
+        var debugBtn = '';
+        if (t.triggerType === 'ONCE') {
+             debugBtn = '<button class="btn-debug" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#fa8c16;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">单次执行</button>';
+        }
+
         return '<tr style="border-bottom:1px solid #e8e8e8;">' +
             '<td style="padding:12px;">' + App.escapeHtml(t.name) + '</td>' +
             '<td style="padding:12px;">' + (flowTypes[t.flowType] || t.flowType || '') + '</td>' +
@@ -98,7 +103,7 @@ Pages.tasks = {
             '<button class="btn-design" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#1890ff;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">设计流程</button>' +
             '<button class="btn-edit" data-id="' + t.id + '" data-task=\'' + App.escapeHtml(JSON.stringify(t)) + '\' style="padding:4px 12px;border:1px solid #d9d9d9;border-radius:4px;background:#fff;cursor:pointer;font-size:12px;margin-right:6px;">编辑</button>' +
             startStopBtn +
-            '<button class="btn-debug" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#fa8c16;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">调试</button>' +
+            debugBtn +
             '<button class="btn-logs" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#13c2c2;color:#fff;cursor:pointer;font-size:12px;margin-right:6px;">日志</button>' +
             '<button class="btn-del" data-id="' + t.id + '" style="padding:4px 12px;border:none;border-radius:4px;background:#ff4d4f;color:#fff;cursor:pointer;font-size:12px;">删除</button>' +
             '</td></tr>';
@@ -120,10 +125,11 @@ Pages.tasks = {
                     App.showToast('解析任务数据失败', 'error');
                 }
             } else if (btn.classList.contains('btn-debug')) {
-                if (window.DebugConsole) {
-                    window.DebugConsole.show(id);
-                } else {
-                    App.showToast('调试模块未加载', 'error');
+                try {
+                    const result = await API.post('/task-flow-configs/' + id + '/execute');
+                    this.showExecResult(result);
+                } catch (err) {
+                    App.showToast('执行失败: ' + err.message, 'error');
                 }
             } else if (btn.classList.contains('btn-logs')) {
                 this.showLogsInterface(id);

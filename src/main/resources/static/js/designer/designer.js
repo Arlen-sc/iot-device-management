@@ -602,13 +602,9 @@
                 execBtn.textContent = '执行中...';
             }
             try {
-                if (window.DebugConsole) {
-                    window.DebugConsole.show(this.taskId);
-                } else {
-                    var result = await API.post('/task-flow-configs/' + this.taskId + '/execute');
-                    if (window.Pages && window.Pages.tasks) {
-                        window.Pages.tasks.showExecResult(result);
-                    }
+                var result = await API.post('/task-flow-configs/' + this.taskId + '/execute');
+                if (window.Pages && window.Pages.tasks) {
+                    window.Pages.tasks.showExecResult(result);
                 }
             } catch (e) {
                 App.showToast('执行失败: ' + e.message, 'error');

@@ -38,7 +38,8 @@ public class FlowExecutionContext {
     }
 
     public void addLog(String message) {
-        executionLog.add("[" + System.currentTimeMillis() + "] " + message);
+        String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
+        executionLog.add("[" + timestamp + "] " + message);
     }
 
     public Device getDevice() {
