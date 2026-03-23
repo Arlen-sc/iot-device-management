@@ -276,13 +276,17 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 
 | 配置项 | 说明 |
 |---|---|
-| branches[] | 分支数组，每项含 {name, condition, nextNodeId} |
+| branches[] | 分支数组，每项含 {condition, nextNodeId} |
 | condition.left | 变量路径 |
 | condition.operator | 运算符 |
 | condition.right | 比较值（支持${var}） |
 | defaultNextNodeId | 默认分支 |
 
-**支持的运算符：** `==` `!=` `>` `<` `>=` `<=` `contains` `starts_with` `ends_with` `array_length_gte` `array_length_gt` `not_null` `is_null`
+**支持的运算符：**  
+`==` `!=` `>` `<` `>=` `<=`  
+`contains`（包含） `starts_with`（前缀匹配） `ends_with`（后缀匹配）  
+`is_empty`（为空） `not_empty`（不为空） `is_null` `not_null`  
+`array_length_eq` `array_length_gt` `array_length_gte` `array_length_lt` `array_length_lte`（数组长度判断）
 
 #### VARIABLE（变量设置）
 
@@ -353,6 +357,10 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 - `SCRIPT` 节点“操作类型”下拉统一改为固定完整选项（覆盖全部已支持操作），避免出现空白选项。
 - 如果流程里已存在旧操作值，编辑器会保留并可继续修改。
 - `SCRIPT` 节点加载时会过滤空操作项并做空值保护，避免旧脏数据导致配置面板白屏。
+- `CONDITION` 节点在分支编辑（分支名/判断变量）时增加了 `branches` 空项过滤与 condition 判空保护，避免输入过程中白屏。
+- 修复 `CONDITION` 分支编辑副作用：新增分支的占位项不再被自动过滤，点击/输入“分支名称”不会被隐藏。
+- `CONDITION` 节点移除“分支名称”输入项，新增操作符：包含、前缀匹配、后缀匹配、为空/不为空、数组长度比较（=/>/>=/</<=）。
+- `CONDITION` 节点操作符展示统一为中文标签；当选择数组长度比较时，判断变量字段会显示“应填写数组变量路径”的提示。
 
 **示例 — hex数据采集与转换：**
 ```json

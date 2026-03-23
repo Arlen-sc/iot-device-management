@@ -33,6 +33,35 @@ const SCRIPT_OPERATION_OPTIONS = [
   { value: 'REPLACE', label: 'REPLACE（字符串替换）' }
 ];
 
+const CONDITION_OPERATOR_OPTIONS = [
+  { value: '>', label: '大于 (>)' },
+  { value: '>=', label: '大于等于 (>=)' },
+  { value: '<', label: '小于 (<)' },
+  { value: '<=', label: '小于等于 (<=)' },
+  { value: '==', label: '等于 (==)' },
+  { value: '!=', label: '不等于 (!=)' },
+  { value: 'contains', label: '包含' },
+  { value: 'starts_with', label: '匹配前缀' },
+  { value: 'ends_with', label: '匹配后缀' },
+  { value: 'is_empty', label: '变量为空' },
+  { value: 'not_empty', label: '变量不为空' },
+  { value: 'array_length_eq', label: '数组长度 = 指定值' },
+  { value: 'array_length_gt', label: '数组长度 > 指定值' },
+  { value: 'array_length_gte', label: '数组长度 >= 指定值' },
+  { value: 'array_length_lt', label: '数组长度 < 指定值' },
+  { value: 'array_length_lte', label: '数组长度 <= 指定值' }
+];
+
+const CONDITION_ARRAY_LENGTH_OPS = [
+  'array_length_eq',
+  'array_length_gt',
+  'array_length_gte',
+  'array_length_lt',
+  'array_length_lte'
+];
+
+const CONDITION_UNARY_OPS = ['is_empty', 'not_empty', 'is_null', 'not_null'];
+
 // A simplified generic Node Form to replace the huge vanilla JS one
 const NodeForm = ({ nodeData, onSave }) => {
   const [form] = Form.useForm();
@@ -68,23 +97,30 @@ const NodeForm = ({ nodeData, onSave }) => {
     
     // 反向解析特殊格式以适应表单
     if (Array.isArray(initialValues.operations)) {
-      initialValues.operations = initialValues.operations
-        .filter(op => op && typeof op === 'object')
-        .map(op => ({
+      initialValues.operations = initialValues.operations.map(op => {
+        if (!op || typeof op !== 'object') {
+          return op;
+        }
+        return {
           ...op,
           paramsStr: op.params ? JSON.stringify(op.params) : undefined
-        }));
+        };
+      });
     }
 
-    if (initialValues.branches) {
+    if (Array.isArray(initialValues.branches)) {
       initialValues.branches = initialValues.branches.map(branch => {
-        if (branch.condition && branch.condition.left) {
+        if (!branch || typeof branch !== 'object') {
+          return branch;
+        }
+        const cond = branch.condition;
+        if (cond && typeof cond === 'object' && cond.left !== undefined) {
           return {
             ...branch,
             condition: {
-              ...branch.condition,
-              variable: branch.condition.left,
-              value: branch.condition.right
+              ...cond,
+              variable: cond.left,
+              value: cond.right
             }
           };
         }
@@ -186,7 +222,7 @@ const NodeForm = ({ nodeData, onSave }) => {
       // 预处理一些特殊的嵌套数据格式
       if (safeValues.operations && Array.isArray(safeValues.operations)) {
         safeValues.operations = safeValues.operations.map(op => {
-          if (!op) return op;
+          if (!op || typeof op !== 'object') return op;
           const safeOp = { ...op };
           if (safeOp.paramsStr) {
             try {
@@ -202,11 +238,17 @@ const NodeForm = ({ nodeData, onSave }) => {
 
       if (safeValues.branches && Array.isArray(safeValues.branches)) {
         safeValues.branches = safeValues.branches.map(branch => {
-          if (!branch) return branch;
+          if (!branch || typeof branch !== 'object') {
+            return branch;
+          }
           const safeBranch = { ...branch };
-          if (safeBranch.condition && safeBranch.condition.variable) {
-             safeBranch.condition.left = safeBranch.condition.variable;
-             safeBranch.condition.right = safeBranch.condition.value;
+          if (safeBranch.condition && typeof safeBranch.condition === 'object') {
+             if (safeBranch.condition.variable !== undefined) {
+               safeBranch.condition.left = safeBranch.condition.variable;
+             }
+             if (safeBranch.condition.value !== undefined) {
+               safeBranch.condition.right = safeBranch.condition.value;
+             }
              delete safeBranch.condition.variable;
              delete safeBranch.condition.value;
           }
@@ -536,32 +578,65 @@ const NodeForm = ({ nodeData, onSave }) => {
                 <>
                   {fields.map(({ key, name, ...restField }) => (
                     <div key={key} style={{ border: '1px dashed #d9d9d9', padding: 12, marginBottom: 12, borderRadius: 4 }}>
-                      <Form.Item {...restField} name={[name, 'name']} label="分支名称">
-                        <Input placeholder="分支名称" />
-                      </Form.Item>
-                      <Form.Item {...restField} name={[name, 'condition', 'variable']} label="判断变量">
-                        <Input placeholder="如: payload.temperature" />
+                      <Form.Item noStyle shouldUpdate={(prev, cur) => {
+                        const prevOp = prev?.branches?.[name]?.condition?.operator;
+                        const curOp = cur?.branches?.[name]?.condition?.operator;
+                        return prevOp !== curOp;
+                      }}>
+                        {() => {
+                          const op = form.getFieldValue(['branches', name, 'condition', 'operator']);
+                          const isArrayLengthMode = CONDITION_ARRAY_LENGTH_OPS.includes(op);
+                          return (
+                            <Form.Item
+                              {...restField}
+                              name={[name, 'condition', 'variable']}
+                              label="判断变量"
+                              help={isArrayLengthMode ? '当前为数组长度判断：请填写数组变量路径（如 payload.items）' : undefined}
+                            >
+                              <Input placeholder={isArrayLengthMode ? '如: payload.items' : '如: payload.temperature'} />
+                            </Form.Item>
+                          );
+                        }}
                       </Form.Item>
                       <Space align="baseline">
                         <Form.Item {...restField} name={[name, 'condition', 'operator']} initialValue=">">
-                          <Select style={{ width: 120 }}>
-                            <Option value=">">&gt;</Option>
-                            <Option value=">=">&gt;=</Option>
-                            <Option value="<">&lt;</Option>
-                            <Option value="<=">&lt;=</Option>
-                            <Option value="==">==</Option>
-                            <Option value="!=">!=</Option>
-                          </Select>
+                          <Select style={{ width: 180 }} options={CONDITION_OPERATOR_OPTIONS} />
                         </Form.Item>
-                        <Form.Item {...restField} name={[name, 'condition', 'value']}>
-                          <Input placeholder="对比值" />
+                        <Form.Item noStyle shouldUpdate={(prev, cur) => {
+                          const prevOp = prev?.branches?.[name]?.condition?.operator;
+                          const curOp = cur?.branches?.[name]?.condition?.operator;
+                          return prevOp !== curOp;
+                        }}>
+                          {() => {
+                            const op = form.getFieldValue(['branches', name, 'condition', 'operator']);
+                            if (CONDITION_UNARY_OPS.includes(op)) {
+                              return null;
+                            }
+                            if (CONDITION_ARRAY_LENGTH_OPS.includes(op)) {
+                              return (
+                                <Form.Item {...restField} name={[name, 'condition', 'value']}>
+                                  <InputNumber min={0} placeholder="数组长度值" style={{ width: 140 }} />
+                                </Form.Item>
+                              );
+                            }
+                            return (
+                              <Form.Item {...restField} name={[name, 'condition', 'value']}>
+                                <Input placeholder="对比值" />
+                              </Form.Item>
+                            );
+                          }}
                         </Form.Item>
                         <MinusCircleOutlined onClick={() => remove(name)} style={{ color: 'red' }} />
                       </Space>
                     </div>
                   ))}
                   <Form.Item>
-                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                    <Button
+                      type="dashed"
+                      onClick={() => add({ condition: { operator: '>' } })}
+                      block
+                      icon={<PlusOutlined />}
+                    >
                       添加分支
                     </Button>
                   </Form.Item>

@@ -38,11 +38,6 @@ public class ConditionNodeHandler implements NodeHandler {
                     branches != null ? branches.size() : 0, logic);
 
             if (branches != null && !branches.isEmpty()) {
-                boolean isMatch = "AND".equalsIgnoreCase(logic); // For AND, assume true and fail on first mismatch. For OR, assume false and succeed on first match.
-                
-                // Track matches to find the target next node
-                String targetNextNodeId = null;
-                
                 // Check if we are combining conditions into a single branch evaluation
                 // In a proper OR/AND we need to evaluate all branches to see if the overall logic is met.
                 // Wait, the previous logic was: each branch has a condition and a nextNodeId.
@@ -72,10 +67,8 @@ public class ConditionNodeHandler implements NodeHandler {
                 } else { // AND logic
                     boolean allMatched = true;
                     String firstNextNodeId = null;
-                    String matchedNames = "";
                     
                     for (Map<String, Object> branch : branches) {
-                        String branchName = (String) branch.get("name");
                         Map<String, Object> condition = (Map<String, Object>) branch.get("condition");
                         if (firstNextNodeId == null) {
                             firstNextNodeId = (String) branch.get("nextNodeId");
@@ -85,7 +78,6 @@ public class ConditionNodeHandler implements NodeHandler {
                             allMatched = false;
                             break;
                         }
-                        matchedNames += branchName + ", ";
                     }
                     
                     if (allMatched && firstNextNodeId != null) {
@@ -143,6 +135,8 @@ public class ConditionNodeHandler implements NodeHandler {
                 return left != null ? !left.toString().equals(right != null ? right.toString() : null) : right != null;
             case "contains":
                 return left != null && left.toString().contains(right != null ? right.toString() : "");
+            case "ends_with":
+                return left != null && left.toString().endsWith(right != null ? right.toString() : "");
             case "equals_trim":
                 if (left == null || right == null) {
                     return false;
@@ -162,10 +156,29 @@ public class ConditionNodeHandler implements NodeHandler {
                     try { return list.size() > toDouble(right); } catch (Exception e) { return false; }
                 }
                 return false;
+            case "array_length_eq":
+                if (left instanceof java.util.List<?> list) {
+                    try { return list.size() == toDouble(right); } catch (Exception e) { return false; }
+                }
+                return false;
+            case "array_length_lt":
+                if (left instanceof java.util.List<?> list) {
+                    try { return list.size() < toDouble(right); } catch (Exception e) { return false; }
+                }
+                return false;
+            case "array_length_lte":
+                if (left instanceof java.util.List<?> list) {
+                    try { return list.size() <= toDouble(right); } catch (Exception e) { return false; }
+                }
+                return false;
             case "not_null":
                 return left != null;
             case "is_null":
                 return left == null;
+            case "is_empty":
+                return isEmptyValue(left);
+            case "not_empty":
+                return !isEmptyValue(left);
             case ">":
             case "<":
             case ">=":
@@ -231,5 +244,24 @@ public class ConditionNodeHandler implements NodeHandler {
             return false;
         }
         return ls.substring(start, end).equals(right.toString());
+    }
+
+    private boolean isEmptyValue(Object value) {
+        if (value == null) {
+            return true;
+        }
+        if (value instanceof String s) {
+            return s.trim().isEmpty();
+        }
+        if (value instanceof java.util.Collection<?> c) {
+            return c.isEmpty();
+        }
+        if (value instanceof java.util.Map<?, ?> m) {
+            return m.isEmpty();
+        }
+        if (value.getClass().isArray()) {
+            return java.lang.reflect.Array.getLength(value) == 0;
+        }
+        return false;
     }
 }
