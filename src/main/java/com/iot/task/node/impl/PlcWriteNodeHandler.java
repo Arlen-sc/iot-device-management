@@ -156,15 +156,38 @@ public class PlcWriteNodeHandler implements NodeHandler {
             Object val = VariablePathUtils.getValue(context.getVariables(), path);
             if (val instanceof Number n) return n.intValue();
             if (val instanceof String s) {
-                try { return Integer.parseInt(s.trim()); } catch (Exception ignored) {}
-                try { return (int) Double.parseDouble(s.trim()); } catch (Exception ignored) {}
+                return stringToInt(s);
             }
             return 0;
         }
 
         // Literal numeric value
-        try { return Integer.parseInt(valueSource); } catch (Exception ignored) {}
-        try { return (int) Double.parseDouble(valueSource); } catch (Exception ignored) {}
+        return stringToInt(valueSource);
+    }
+
+    /**
+     * Convert string to integer, handling both numeric strings and alphanumeric codes.
+     */
+    private int stringToInt(String s) {
+        if (s == null) return 0;
+        s = s.trim();
+        
+        // Try direct numeric conversion first
+        try { return Integer.parseInt(s); } catch (Exception ignored) {}
+        try { return (int) Double.parseDouble(s); } catch (Exception ignored) {}
+        
+        // For alphanumeric codes like box codes, extract numeric part
+        String numericPart = s.replaceAll("[^0-9]", "");
+        if (!numericPart.isEmpty()) {
+            try {
+                // Take first 9 digits to fit in 32-bit integer
+                if (numericPart.length() > 9) {
+                    numericPart = numericPart.substring(0, 9);
+                }
+                return Integer.parseInt(numericPart);
+            } catch (Exception ignored) {}
+        }
+        
         return 0;
     }
 

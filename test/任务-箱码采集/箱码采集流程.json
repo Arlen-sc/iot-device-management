@@ -1,0 +1,124 @@
+{
+  "nodes": [
+    {
+      "id": "node_start",
+      "type": "START",
+      "name": "开始节点",
+      "config": {}
+    },
+    {
+      "id": "node_tcp_server_start",
+      "type": "TCP_SERVER",
+      "name": "启动TCP服务端",
+      "config": {
+        "port": 8888,
+        "operation": "START"
+      }
+    },
+    {
+      "id": "node_tcp_server_receive",
+      "type": "TCP_SERVER",
+      "name": "接收箱码数据",
+      "config": {
+        "port": 8888,
+        "operation": "RECEIVE",
+        "outputVariable": "boxCodeData",
+        "timeout": 60000
+      }
+    },
+    {
+      "id": "node_condition_check_data",
+      "type": "CONDITION",
+      "name": "检查数据是否存在",
+      "config": {
+        "logic": "AND",
+        "branches": [
+          {
+            "name": "Data OK",
+            "condition": { "left": "boxCodeData", "operator": "not_null" },
+            "nextNodeId": "node_sql_query"
+          }
+        ],
+        "defaultNextNodeId": "node_end"
+      }
+    },
+    {
+      "id": "node_sql_query",
+      "type": "SQL_QUERY",
+      "name": "查询装箱表",
+      "config": {
+        "dbType": "MYSQL",
+        "dbHost": "127.0.0.1",
+        "dbPort": 3306,
+        "dbName": "iot_db",
+        "username": "root",
+        "password": "encrypted_password",
+        "sql": "SELECT * FROM 装箱表",
+        "outputVariable": "boxingData"
+      }
+    },
+    {
+      "id": "node_condition_check_db",
+      "type": "CONDITION",
+      "name": "检查数据库是否有数据",
+      "config": {
+        "logic": "AND",
+        "branches": [
+          {
+            "name": "DB Data OK",
+            "condition": { "left": "boxingData", "operator": "array_length_gt", "right": 0 },
+            "nextNodeId": "node_plc_write"
+          }
+        ],
+        "defaultNextNodeId": "node_alert"
+      }
+    },
+    {
+      "id": "node_alert",
+      "type": "LOG",
+      "name": "报警：无数据",
+      "config": {
+        "level": "ERROR",
+        "message": "装箱表无数据，需要先添加数据"
+      }
+    },
+    {
+      "id": "node_plc_write",
+      "type": "PLC_WRITE",
+      "name": "写入PLC寄存器",
+      "config": {
+        "host": "127.0.0.1",
+        "port": 502,
+        "unitId": 1,
+        "registers": [
+          {
+            "address": 5501,
+            "valueSource": "${boxCodeData}"
+          },
+          {
+            "address": 5502,
+            "valueSource": "${boxingData[0].序号}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "node_end",
+      "type": "END",
+      "name": "结束节点",
+      "config": {}
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "node_start", "target": "node_tcp_server_start" },
+    { "id": "e2", "source": "node_tcp_server_start", "target": "node_tcp_server_receive" },
+    { "id": "e3", "source": "node_tcp_server_receive", "target": "node_condition_check_data" },
+    { "id": "e4", "source": "node_condition_check_data", "sourceAnchor": "true", "target": "node_sql_query" },
+    { "id": "e4_f", "source": "node_condition_check_data", "sourceAnchor": "false", "target": "node_end" },
+    { "id": "e5", "source": "node_sql_query", "target": "node_condition_check_db" },
+    { "id": "e6", "source": "node_condition_check_db", "sourceAnchor": "true", "target": "node_plc_write" },
+    { "id": "e6_f", "source": "node_condition_check_db", "sourceAnchor": "false", "target": "node_alert" },
+    { "id": "e7", "source": "node_alert", "target": "node_end" },
+    { "id": "e8", "source": "node_plc_write", "target": "node_end" }
+  ]
+}

@@ -9,10 +9,10 @@
     {
       "id": "node_tcp_client_camera",
       "type": "TCP_CLIENT",
-      "name": "1.获取摄像机数据",
+      "name": "1.获取摄像头参数",
       "config": {
-        "host": "127.0.0.1",
-        "port": 9001,
+        "host": "192.168.1.100",
+        "port": 9999,
         "readMode": "RAW",
         "outputVariable": "cameraRawHex",
         "waitResponse": true
@@ -52,7 +52,7 @@
       "config": {
         "operations": [
           { "op": "ARRAY_SLICE", "source": "rs", "target": "subArr", "params": { "start": 0, "end": 6 } },
-          { "op": "JSON_BUILD", "target": "jsonStr", "params": { "template": "{\"data\": ${subArr}, \"type\": \"camera\"}" } },
+          { "op": "JSON_BUILD", "target": "jsonStr", "params": { "template": "{\"type\": \"camera_data\", \"data\": ${subArr}}" } },
           { "op": "STRING_TO_HEX", "source": "jsonStr", "target": "broadcastHex" }
         ]
       }
@@ -60,9 +60,9 @@
     {
       "id": "node_tcp_server_start",
       "type": "TCP_SERVER",
-      "name": "启动广播服务器",
+      "name": "启动TCP服务端",
       "config": {
-        "port": 9100,
+        "port": 8888,
         "operation": "START"
       }
     },
@@ -79,7 +79,7 @@
       "type": "TCP_SERVER",
       "name": "3.1.广播数据",
       "config": {
-        "port": 9100,
+        "port": 8888,
         "operation": "BROADCAST",
         "sendData": "${broadcastHex}",
         "sendHex": true
@@ -88,12 +88,12 @@
     {
       "id": "node_tcp_server_listen",
       "type": "TCP_SERVER",
-      "name": "4.监听返回数据",
+      "name": "4.监听指令",
       "config": {
-        "port": 9100,
+        "port": 8888,
         "operation": "RECEIVE",
         "outputVariable": "serverReceived",
-        "timeout": 5000
+        "timeout": 30000
       }
     },
     {
@@ -134,8 +134,8 @@
       "type": "TCP_CLIENT",
       "name": "6.1.传给另一个设备",
       "config": {
-        "host": "127.0.0.1",
-        "port": 9002,
+        "host": "192.168.1.200",
+        "port": 8889,
         "sendData": "${deviceCmdHex}",
         "sendHex": true,
         "readMode": "LINE",
@@ -187,7 +187,7 @@
       "name": "8.推送至HTTP",
       "config": {
         "method": "GET",
-        "url": "http://127.0.0.1:8890/api/push?data=${finalData}"
+        "url": "http://192.168.1.300:8080/api/push?data=${finalData}"
       }
     },
     {
