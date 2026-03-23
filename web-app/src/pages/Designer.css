@@ -42,7 +42,9 @@
   padding: 16px;
   overflow-y: auto;
   box-shadow: 1px 0 2px 0 rgba(0,0,0,0.03);
-  z-index: 5;
+  z-index: 100;
+  position: relative;
+  flex-shrink: 0;
 }
 
 .stencil-group {
@@ -52,24 +54,34 @@
   margin: 16px 0 8px 0;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  clear: both;
 }
 
 .stencil-group:first-child {
   margin-top: 0;
 }
 
+.stencil-items-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
 .stencil-item {
-  height: 36px;
-  line-height: 34px;
+  height: 48px;
+  line-height: 46px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
-  margin-bottom: 8px;
   text-align: center;
   cursor: grab;
-  font-size: 13px;
+  font-size: 12px;
   background: #f8fafc;
   color: #475569;
   transition: all 0.2s ease;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .stencil-item:hover {

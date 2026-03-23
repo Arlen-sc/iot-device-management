@@ -27,6 +27,7 @@ public class SecurityConfig {
                 .requestMatchers("/assets/**", "/*.svg", "/*.png", "/login.html").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/api/**").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form

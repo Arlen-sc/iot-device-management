@@ -5,7 +5,7 @@ import { Dnd } from '@antv/x6-plugin-dnd';
 import { Snapline } from '@antv/x6-plugin-snapline';
 import { Keyboard } from '@antv/x6-plugin-keyboard';
 import { Selection } from '@antv/x6-plugin-selection';
-import { Button, message, Space, Modal, Drawer } from 'antd';
+import { Menu, Button, message, Space, Modal, Drawer } from 'antd';
 import { 
   ZoomInOutlined, 
   ZoomOutOutlined, 
@@ -39,8 +39,30 @@ Graph.registerNode('flow-node', {
   },
   ports: {
     groups: {
-      in: { position: 'top', attrs: { circle: { r: 4, magnet: true, stroke: '#1890ff', fill: '#fff' } } },
-      out: { position: 'bottom', attrs: { circle: { r: 4, magnet: true, stroke: '#1890ff', fill: '#fff' } } },
+      in: { 
+        position: 'top', 
+        attrs: { 
+          circle: { 
+            r: 4, 
+            magnet: true, 
+            stroke: '#1890ff', 
+            fill: '#fff',
+            style: { visibility: 'visible' }
+          } 
+        } 
+      },
+      out: { 
+        position: 'bottom', 
+        attrs: { 
+          circle: { 
+            r: 4, 
+            magnet: true, 
+            stroke: '#1890ff', 
+            fill: '#fff',
+            style: { visibility: 'visible' }
+          } 
+        } 
+      },
     },
   },
 });
@@ -53,7 +75,25 @@ Graph.registerNode('start-node', {
     body: { fill: '#f6ffed', stroke: '#52c41a', strokeWidth: 2 },
     label: { text: '开始', fill: '#52c41a', fontSize: 14 },
   },
-  ports: { groups: { out: { position: 'bottom', attrs: { circle: { r: 4, magnet: true, stroke: '#52c41a', fill: '#fff' } } } } },
+  ports: {
+    items: [
+      { id: 'port_out', group: 'out' }
+    ],
+    groups: { 
+      out: { 
+        position: 'bottom', 
+        attrs: { 
+          circle: { 
+            r: 4, 
+            magnet: true, 
+            stroke: '#52c41a', 
+            fill: '#fff',
+            style: { visibility: 'visible' }
+          } 
+        } 
+      } 
+    } 
+  },
 });
 
 Graph.registerNode('end-node', {
@@ -64,7 +104,25 @@ Graph.registerNode('end-node', {
     body: { fill: '#fff1f0', stroke: '#ff4d4f', strokeWidth: 2 },
     label: { text: '结束', fill: '#ff4d4f', fontSize: 14 },
   },
-  ports: { groups: { in: { position: 'top', attrs: { circle: { r: 4, magnet: true, stroke: '#ff4d4f', fill: '#fff' } } } } },
+  ports: {
+    items: [
+      { id: 'port_in', group: 'in' }
+    ],
+    groups: { 
+      in: { 
+        position: 'top', 
+        attrs: { 
+          circle: { 
+            r: 4, 
+            magnet: true, 
+            stroke: '#ff4d4f', 
+            fill: '#fff',
+            style: { visibility: 'visible' }
+          } 
+        } 
+      } 
+    } 
+  },
 });
 
 const nodeTypeMap = {
@@ -99,6 +157,13 @@ const Designer = () => {
   const [formVisible, setFormVisible] = useState(false);
   const [debugVisible, setDebugVisible] = useState(false);
 
+  const [contextMenu, setContextMenu] = useState({
+    visible: false,
+    x: 0,
+    y: 0,
+    node: null
+  });
+
   // Initialize Graph
   useEffect(() => {
     if (!containerRef.current) return;
@@ -110,12 +175,20 @@ const Designer = () => {
       mousewheel: { enabled: true, modifiers: ['ctrl', 'meta'] },
       connecting: {
         snap: true, allowBlank: false, allowLoop: false, allowNode: false,
+        router: {
+          name: 'manhattan',
+          args: {
+            startDirections: ['bottom'],
+            endDirections: ['top'],
+            padding: 10
+          }
+        },
         createEdge() {
           return g.createEdge({
             attrs: {
               line: { stroke: '#1890ff', strokeWidth: 2, targetMarker: { name: 'block', width: 10, height: 6 } }
             },
-            zIndex: 0,
+            zIndex: -1,
           });
         }
       }
@@ -138,17 +211,46 @@ const Designer = () => {
       setFormVisible(true);
     });
 
+    // Right-click menu for nodes
+    g.on('node:contextmenu', ({ node, x, y, e }) => {
+      e.preventDefault();
+      setContextMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        node
+      });
+    });
+
+    // Right-click menu for canvas
+    g.on('blank:contextmenu', ({ x, y, e }) => {
+      e.preventDefault();
+      setContextMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        node: null
+      });
+    });
+
     const dndInstance = new Dnd({
       target: g,
       scaled: false,
       dndContainer: stencilRef.current,
     });
 
+    // Close context menu when clicking elsewhere
+    const handleClickOutside = () => {
+      setContextMenu(prev => ({ ...prev, visible: false }));
+    };
+    document.addEventListener('click', handleClickOutside);
+
     setGraph(g);
     setDnd(dndInstance);
 
     return () => {
       g.dispose();
+      document.removeEventListener('click', handleClickOutside);
     };
   }, []);
 
@@ -160,8 +262,8 @@ const Designer = () => {
       try {
         const data = await api.get(`/task-flow-configs/${id}`);
         setTaskName(data.name);
-        if (data.flowDataJson) {
-          const graphData = JSON.parse(data.flowDataJson);
+        if (data.flowJson) {
+          const graphData = JSON.parse(data.flowJson);
           graph.fromJSON(graphData);
           graph.centerContent();
         }
@@ -210,7 +312,7 @@ const Designer = () => {
     }
 
     try {
-      await api.put(`/task-flow-configs/${id}`, { flowDataJson: JSON.stringify(json) });
+      await api.put(`/task-flow-configs/${id}`, { flowJson: JSON.stringify(json) });
       message.success('保存成功');
     } catch (err) {
       message.error('保存失败: ' + err.message);
@@ -238,22 +340,28 @@ const Designer = () => {
         {/* Left Stencil */}
         <div className="designer-stencil" ref={stencilRef}>
           <div className="stencil-group">基础节点</div>
-          <div className="stencil-item start" onMouseDown={e => handleDragStart(e, 'START')}>开始节点</div>
-          <div className="stencil-item end" onMouseDown={e => handleDragStart(e, 'END')}>结束节点</div>
-          <div className="stencil-item condition" onMouseDown={e => handleDragStart(e, 'CONDITION')}>条件分支</div>
-          <div className="stencil-item delay" onMouseDown={e => handleDragStart(e, 'DELAY')}>延迟节点</div>
-          <div className="stencil-item script" onMouseDown={e => handleDragStart(e, 'SCRIPT')}>脚本处理</div>
+          <div className="stencil-items-grid">
+            <div className="stencil-item start" onMouseDown={e => handleDragStart(e, 'START')}>开始节点</div>
+            <div className="stencil-item end" onMouseDown={e => handleDragStart(e, 'END')}>结束节点</div>
+            <div className="stencil-item condition" onMouseDown={e => handleDragStart(e, 'CONDITION')}>条件分支</div>
+            <div className="stencil-item delay" onMouseDown={e => handleDragStart(e, 'DELAY')}>延迟节点</div>
+            <div className="stencil-item script" onMouseDown={e => handleDragStart(e, 'SCRIPT')}>脚本处理</div>
+          </div>
           
           <div className="stencil-group">设备与通信</div>
-          <div className="stencil-item default" onMouseDown={e => handleDragStart(e, 'DEVICE_DATA')}>设备数据</div>
-          <div className="stencil-item default" onMouseDown={e => handleDragStart(e, 'DEVICE_CONTROL')}>设备控制</div>
-          <div className="stencil-item tcp" onMouseDown={e => handleDragStart(e, 'TCP_SEND')}>TCP 发送</div>
-          <div className="stencil-item http" onMouseDown={e => handleDragStart(e, 'HTTP_REQUEST')}>HTTP 请求</div>
+          <div className="stencil-items-grid">
+            <div className="stencil-item default" onMouseDown={e => handleDragStart(e, 'DEVICE_DATA')}>设备数据</div>
+            <div className="stencil-item default" onMouseDown={e => handleDragStart(e, 'DEVICE_CONTROL')}>设备控制</div>
+            <div className="stencil-item tcp" onMouseDown={e => handleDragStart(e, 'TCP_SEND')}>TCP 发送</div>
+            <div className="stencil-item http" onMouseDown={e => handleDragStart(e, 'HTTP_REQUEST')}>HTTP 请求</div>
+          </div>
           
           <div className="stencil-group">数据处理</div>
-          <div className="stencil-item db" onMouseDown={e => handleDragStart(e, 'DB_OPERATION')}>数据库操作</div>
-          <div className="stencil-item dedup" onMouseDown={e => handleDragStart(e, 'DEDUP_FILTER')}>去重过滤</div>
-          <div className="stencil-item log" onMouseDown={e => handleDragStart(e, 'LOG')}>日志记录</div>
+          <div className="stencil-items-grid">
+            <div className="stencil-item db" onMouseDown={e => handleDragStart(e, 'DB_OPERATION')}>数据库操作</div>
+            <div className="stencil-item dedup" onMouseDown={e => handleDragStart(e, 'DEDUP_FILTER')}>去重过滤</div>
+            <div className="stencil-item log" onMouseDown={e => handleDragStart(e, 'LOG')}>日志记录</div>
+          </div>
         </div>
 
         {/* Canvas */}
@@ -287,6 +395,40 @@ const Designer = () => {
           taskId={id} 
           onCancel={() => setDebugVisible(false)} 
         />
+      )}
+
+      {/* Context Menu */}
+      {contextMenu.visible && (
+        <Menu
+          style={{
+            position: 'fixed',
+            left: contextMenu.x,
+            top: contextMenu.y,
+            zIndex: 10000
+          }}
+          onClick={(e) => {
+            setContextMenu({ ...contextMenu, visible: false });
+            if (e.key === 'edit' && contextMenu.node) {
+              setSelectedNode(contextMenu.node);
+              setFormVisible(true);
+            } else if (e.key === 'delete' && contextMenu.node) {
+              graph?.removeCells([contextMenu.node]);
+            } else if (e.key === 'center') {
+              graph?.centerContent();
+            }
+          }}
+        >
+          {contextMenu.node ? (
+            [
+              <Menu.Item key="edit">编辑节点</Menu.Item>,
+              <Menu.Item key="delete">删除节点</Menu.Item>
+            ]
+          ) : (
+            [
+              <Menu.Item key="center">居中显示</Menu.Item>
+            ]
+          )}
+        </Menu>
       )}
     </div>
   );
