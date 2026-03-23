@@ -1,43 +1,99 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Modal, Button, Tag, Table, Space, message, Spin } from 'antd';
+import { Modal, Button, Tag, Table } from 'antd';
 import api from '../utils/api';
 
 const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
-  const openedOnceRef = useRef(false);
+  const [logs, setLogs] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
+  const pollOffsetRef = useRef(0);
+  const pollTimerRef = useRef(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
+
+  const fetchLogs = useCallback(async (sid) => {
+    if (!sid) return;
+    try {
+      const data = await api.get(`/task-flow-configs/${taskId}/debug/${sid}/logs`, {
+        params: { offset: pollOffsetRef.current }
+      });
+      const newLogs = Array.isArray(data.logs) ? data.logs : [];
+      if (newLogs.length > 0) {
+        setLogs(prev => [...prev, ...newLogs]);
+      }
+      pollOffsetRef.current = Number(data.nextOffset || pollOffsetRef.current);
+      if (data.status && data.status !== 'RUNNING') {
+        setRunning(false);
+        setResult({
+          status: data.status,
+          variables: data.variables || {}
+        });
+        return;
+      }
+      pollTimerRef.current = setTimeout(() => {
+        void fetchLogs(sid);
+      }, 400);
+    } catch (err) {
+      setRunning(false);
+      setResult({
+        status: 'ERROR',
+        variables: {},
+      });
+      setLogs(prev => [...prev, {
+        timestamp: new Date().toLocaleTimeString(),
+        level: 'ERROR',
+        message: '拉取实时日志失败: ' + err.message,
+        actionType: 'SYSTEM',
+        nodeName: 'DebugConsole'
+      }]);
+    }
+  }, [taskId]);
+
+  const handleRun = useCallback(async () => {
+    stopPolling();
+    setRunning(true);
+    setResult({ status: 'RUNNING', variables: {} });
+    setLogs([]);
+    setSessionId(null);
+    pollOffsetRef.current = 0;
+    try {
+      const start = await api.post(`/task-flow-configs/${taskId}/debug/start`);
+      const sid = start?.sessionId;
+      if (!sid) throw new Error('未获取到调试会话ID');
+      setSessionId(sid);
+      await fetchLogs(sid);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      setRunning(false);
+      setResult({ status: 'ERROR', variables: {} });
+      setLogs([{
+        timestamp: new Date().toLocaleTimeString(),
+        level: 'ERROR',
+        message: '启动调试失败: ' + err.message,
+        actionType: 'SYSTEM',
+        nodeName: 'DebugConsole'
+      }]);
+    }
+  }, [taskId, onSuccess, fetchLogs, stopPolling]);
 
   useEffect(() => {
     if (!visible) {
-      openedOnceRef.current = false;
+      stopPolling();
+      setRunning(false);
+      setSessionId(null);
+      pollOffsetRef.current = 0;
       return;
     }
-    if (!taskId || openedOnceRef.current) return;
-    openedOnceRef.current = true;
-    handleRun();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅打开时自动跑一次
-  }, [visible, taskId]);
-
-  const handleRun = async () => {
-    setRunning(true);
-    setResult(null);
-    try {
-      const res = await api.post(`/task-flow-configs/${taskId}/execute`);
-      setResult(res);
-      if (onSuccess) onSuccess();
-    } catch (err) {
-      setResult({
-        status: 'FAILED',
-        logs: [{
-          timestamp: new Date().toISOString(),
-          level: 'ERROR',
-          message: '执行异常: ' + err.message
-        }]
-      });
-    } finally {
-      setRunning(false);
-    }
-  };
+    if (!taskId) return;
+    void handleRun();
+    return () => stopPolling();
+  }, [visible, taskId, handleRun, stopPolling]);
 
   const renderLogEntry = (log, idx) => {
     if (typeof log === 'string') {
@@ -88,10 +144,20 @@ const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
     <Modal
       title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: 32 }}>
-          <span>流程调试控制台</span>
-          <Button type="primary" onClick={handleRun} loading={running} style={{ background: '#52c41a' }}>
-            {running ? '运行中...' : '开始运行'}
-          </Button>
+          <span>流程调试控制台{sessionId ? ` (${sessionId.slice(0, 8)})` : ''}</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              onClick={() => {
+                setLogs([]);
+              }}
+              disabled={running}
+            >
+              清空
+            </Button>
+            <Button type="primary" onClick={handleRun} loading={running} style={{ background: '#52c41a' }}>
+              {running ? '运行中...' : '开始运行'}
+            </Button>
+          </div>
         </div>
       }
       open={visible}
@@ -108,14 +174,16 @@ const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
           <div style={{ flex: 1, overflowY: 'auto', background: '#1e1e1e', padding: 16, fontFamily: 'monospace', fontSize: 13 }}>
             {running ? (
               <div style={{color: '#1890ff'}}>[SYSTEM] 开始执行流程...</div>
-            ) : !result ? (
+            ) : logs.length === 0 && !result ? (
               <div style={{color: '#666'}}>等待运行...</div>
             ) : (
               <>
-                {result.logs?.length ? result.logs.map(renderLogEntry) : <div style={{color: '#999'}}>[SYSTEM] 无日志输出</div>}
-                <div style={{ color: result.status === 'SUCCESS' ? '#52c41a' : '#ff4d4f', marginTop: 16, fontWeight: 'bold' }}>
-                  [SYSTEM] 执行结束，状态: {result.status}
-                </div>
+                {logs.length ? logs.map(renderLogEntry) : <div style={{color: '#999'}}>[SYSTEM] 当前调试窗口暂无日志</div>}
+                {!running && result?.status && result.status !== 'RUNNING' && (
+                  <div style={{ color: result.status === 'SUCCESS' ? '#52c41a' : '#ff4d4f', marginTop: 16, fontWeight: 'bold' }}>
+                    [SYSTEM] 执行结束，状态: {result.status}
+                  </div>
+                )}
               </>
             )}
           </div>

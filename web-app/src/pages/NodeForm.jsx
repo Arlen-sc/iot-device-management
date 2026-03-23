@@ -245,10 +245,10 @@ const NodeForm = ({ nodeData, onSave }) => {
       case 'TCP_CLIENT':
         return (
           <>
-            <Form.Item name="host" label="主机地址" rules={[{ required: true }]}>
+            <Form.Item name="host" label="对端地址" rules={[{ required: true }]}>
               <Input placeholder="127.0.0.1" />
             </Form.Item>
-            <Form.Item name="port" label="端口" rules={[{ required: true }]}>
+            <Form.Item name="port" label="对端端口" rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="readMode" label="读取模式" initialValue="RAW">
@@ -258,7 +258,7 @@ const NodeForm = ({ nodeData, onSave }) => {
               </Select>
             </Form.Item>
             <Form.Item name="sendData" label="发送数据">
-              <Input placeholder="输入发送内容，支持 ${var}" />
+              <Input placeholder="输入发送内容，支持 ${var}，可留空仅连接" />
             </Form.Item>
             <Form.Item name="sendHex" label="作为十六进制发送" valuePropName="checked">
               <Switch />
@@ -267,7 +267,7 @@ const NodeForm = ({ nodeData, onSave }) => {
               <Switch />
             </Form.Item>
             <Form.Item name="outputVariable" label="输出变量名">
-              <Input placeholder="接收到的数据存入此变量" />
+              <Input placeholder="接收数据写入的变量名" />
             </Form.Item>
             <Form.Item name="timeout" label="超时时间 (ms)" initialValue={5000}>
               <InputNumber min={100} style={{ width: '100%' }} />
@@ -275,18 +275,78 @@ const NodeForm = ({ nodeData, onSave }) => {
           </>
         );
 
-      case 'TCP_LISTEN':
       case 'TCP_SERVER':
         return (
           <>
+            <Form.Item name="operation" label="服务端操作" initialValue="START" rules={[{ required: true }]}>
+              <Select>
+                <Option value="START">启动监听</Option>
+                <Option value="BROADCAST">广播数据</Option>
+                <Option value="RECEIVE">接收数据</Option>
+                <Option value="STOP">停止监听</Option>
+              </Select>
+            </Form.Item>
             <Form.Item name="port" label="监听端口" rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="outputVariable" label="输出变量名" rules={[{ required: true }]}>
-              <Input placeholder="接收到的数据存入此变量" />
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.operation !== cur.operation}>
+              {() => {
+                const op = form.getFieldValue('operation') || 'START';
+                if (op === 'BROADCAST') {
+                  return (
+                    <>
+                      <Form.Item name="sendData" label="广播内容">
+                        <Input placeholder="支持 ${变量}" />
+                      </Form.Item>
+                      <Form.Item name="sendHex" label="按十六进制解析" valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </>
+                  );
+                }
+                if (op === 'RECEIVE') {
+                  return (
+                    <>
+                      <Form.Item name="outputVariable" label="输出变量名" initialValue="tcpServerData" rules={[{ required: true }]}>
+                        <Input placeholder="接收数据写入变量" />
+                      </Form.Item>
+                      <Form.Item name="timeout" label="接收超时 (ms)" initialValue={10000}>
+                        <InputNumber min={100} style={{ width: '100%' }} />
+                      </Form.Item>
+                    </>
+                  );
+                }
+                if (op === 'STOP') {
+                  return (
+                    <Form.Item name="cleanupOnStop" label="停止时清理本任务队列" valuePropName="checked" initialValue={true}>
+                      <Switch />
+                    </Form.Item>
+                  );
+                }
+                return (
+                  <div style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>
+                    同一端口在进程内只会监听一次；连续执行任务不会在 STOP 时关闭端口（见引擎逻辑）。
+                  </div>
+                );
+              }}
             </Form.Item>
-            <Form.Item name="timeout" label="接收超时 (ms)" initialValue={10000}>
+          </>
+        );
+
+      case 'TCP_LISTEN':
+        return (
+          <>
+            <Form.Item name="host" label="对端地址" rules={[{ required: true }]}>
+              <Input placeholder="127.0.0.1" />
+            </Form.Item>
+            <Form.Item name="port" label="对端端口" rules={[{ required: true }]}>
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="timeout" label="读取超时 (ms)" initialValue={5000}>
               <InputNumber min={100} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="outputVariable" label="输出变量名" rules={[{ required: true }]} initialValue="tcpData">
+              <Input placeholder="接收到的数据存入此变量" />
             </Form.Item>
           </>
         );
@@ -583,42 +643,6 @@ const NodeForm = ({ nodeData, onSave }) => {
 
             <Form.Item name="timeout" label="超时时间 (ms)" initialValue={5000}>
               <InputNumber min={100} style={{ width: '100%' }} />
-            </Form.Item>
-          </>
-        );
-
-      case 'TCP_SEND':
-        return (
-          <>
-            <Form.Item name="host" label="目标主机" rules={[{ required: true }]}>
-              <Input placeholder="127.0.0.1" />
-            </Form.Item>
-            <Form.Item name="port" label="目标端口" rules={[{ required: true }]}>
-              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="sendData" label="发送数据" rules={[{ required: true }]}>
-              <Input placeholder="输入发送内容，支持 ${var}" />
-            </Form.Item>
-            <Form.Item name="sendHex" label="作为十六进制发送" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-            <Form.Item name="waitResponse" label="等待响应" valuePropName="checked" initialValue={false}>
-              <Switch />
-            </Form.Item>
-          </>
-        );
-
-      case 'TCP_LISTEN':
-        return (
-          <>
-            <Form.Item name="port" label="监听端口" rules={[{ required: true }]}>
-              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="timeout" label="接收超时 (ms)" initialValue={10000}>
-              <InputNumber min={100} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="outputVariable" label="输出变量名" rules={[{ required: true }]}>
-              <Input placeholder="接收到的数据存入此变量" />
             </Form.Item>
           </>
         );

@@ -177,7 +177,12 @@ const nodeTypeMap = {
   PLC_READ: { label: 'PLC 读取', color: '#eb2f96' },
   PLC_WRITE: { label: 'PLC 写入', color: '#eb2f96' },
   TCP_LISTEN: { label: 'TCP 监听', color: '#fa8c16' },
-  TCP_SEND: { label: 'TCP 发送', color: '#fa8c16' },
+  /** 主动连接对端（与后端 TCP_CLIENT 一致） */
+  TCP_CLIENT: { label: 'TCP 客户端', color: '#fa8c16' },
+  /** 本机监听，与后端 TCP_SERVER 一致 */
+  TCP_SERVER: { label: 'TCP 服务端', color: '#d46b08' },
+  /** 兼容旧画布 */
+  TCP_SEND: { label: 'TCP 客户端', color: '#fa8c16' },
   DEVICE_CONTROL: { label: '设备控制', color: '#52c41a' },
   DEVICE_DATA: { label: '设备数据', color: '#52c41a' },
   LOG: { label: '日志记录', color: '#8c8c8c' },
@@ -206,6 +211,7 @@ const Designer = () => {
     node: null,
     edge: null
   });
+  const contextMenuRef = useRef(null);
 
   // Initialize Graph
   useEffect(() => {
@@ -319,8 +325,7 @@ const Designer = () => {
 
     // Close context menu when clicking elsewhere
     const handleClickOutside = (e) => {
-      const menuElement = document.querySelector('.ant-dropdown-menu');
-      if (!menuElement || !menuElement.contains(e.target)) {
+      if (!contextMenuRef.current || !contextMenuRef.current.contains(e.target)) {
         setContextMenu(prev => ({ ...prev, visible: false }));
       }
     };
@@ -455,7 +460,8 @@ const Designer = () => {
           <div className="stencil-items-grid">
             <div className="stencil-item default" onMouseDown={e => handleDragStart(e, 'DEVICE_DATA')}>设备数据</div>
             <div className="stencil-item default" onMouseDown={e => handleDragStart(e, 'DEVICE_CONTROL')}>设备控制</div>
-            <div className="stencil-item tcp" onMouseDown={e => handleDragStart(e, 'TCP_SEND')}>TCP 发送</div>
+            <div className="stencil-item tcp" onMouseDown={e => handleDragStart(e, 'TCP_CLIENT')}>TCP 客户端</div>
+            <div className="stencil-item tcp" style={{ borderColor: '#d46b08' }} onMouseDown={e => handleDragStart(e, 'TCP_SERVER')}>TCP 服务端</div>
             <div className="stencil-item http" onMouseDown={e => handleDragStart(e, 'HTTP_REQUEST')}>HTTP 请求</div>
           </div>
           
@@ -519,50 +525,54 @@ const Designer = () => {
 
       {/* Context Menu */}
       {contextMenu.visible && (
-        <Menu
+        <div
+          ref={contextMenuRef}
           style={{
             position: 'fixed',
             left: contextMenu.x,
             top: contextMenu.y,
             zIndex: 10000
           }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setContextMenu({ ...contextMenu, visible: false });
-            if (e.key === 'edit' && contextMenu.node) {
-              setSelectedNode(contextMenu.node);
-              selectedNodeRef.current = contextMenu.node;
-            } else if (e.key === 'delete') {
-              if (contextMenu.node) {
-                graph?.removeCells([contextMenu.node]);
-                setSelectedNode(null);
-                selectedNodeRef.current = null;
-              } else if (contextMenu.edge) {
-                graph?.removeCells([contextMenu.edge]);
-              }
-            } else if (e.key === 'center') {
-              graph?.centerContent();
-            }
-          }}
-          onMouseDown={(e) => {
-            e.stopPropagation();
-          }}
         >
-          {contextMenu.node ? (
-            [
-              <Menu.Item key="edit">编辑节点</Menu.Item>,
-              <Menu.Item key="delete">删除节点</Menu.Item>
-            ]
-          ) : contextMenu.edge ? (
-            [
-              <Menu.Item key="delete">删除连线</Menu.Item>
-            ]
-          ) : (
-            [
-              <Menu.Item key="center">居中显示</Menu.Item>
-            ]
-          )}
-        </Menu>
+          <Menu
+            onClick={({ key, domEvent }) => {
+              domEvent?.stopPropagation();
+              setContextMenu(prev => ({ ...prev, visible: false }));
+              if (key === 'edit' && contextMenu.node) {
+                setSelectedNode(contextMenu.node);
+                selectedNodeRef.current = contextMenu.node;
+              } else if (key === 'delete') {
+                if (contextMenu.node) {
+                  graph?.removeCells([contextMenu.node]);
+                  setSelectedNode(null);
+                  selectedNodeRef.current = null;
+                } else if (contextMenu.edge) {
+                  graph?.removeCells([contextMenu.edge]);
+                }
+              } else if (key === 'center') {
+                graph?.centerContent();
+              }
+            }}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            {contextMenu.node ? (
+              [
+                <Menu.Item key="edit">编辑节点</Menu.Item>,
+                <Menu.Item key="delete">删除节点</Menu.Item>
+              ]
+            ) : contextMenu.edge ? (
+              [
+                <Menu.Item key="delete">删除连线</Menu.Item>
+              ]
+            ) : (
+              [
+                <Menu.Item key="center">居中显示</Menu.Item>
+              ]
+            )}
+          </Menu>
+        </div>
       )}
     </div>
   );

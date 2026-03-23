@@ -128,6 +128,17 @@
 
     <build>
         <plugins>
+            <!-- 显式启用完整批注处理（Lombok 等），并抑制 JDK 21+ 关于 -proc 的提示 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <compilerArgs>
+                        <arg>-proc:full</arg>
+                        <arg>-Xlint:-options</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
             <!-- 构建时在 web-app 执行 npm，将产物写入 src/main/resources/static（需本机已安装 Node.js 并在 PATH 中可用） -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>

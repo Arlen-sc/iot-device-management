@@ -25,6 +25,8 @@ public class FlowEngine {
 
     /** Running continuous flows: configId → runner info. */
     private final ConcurrentHashMap<Long, ContinuousRunner> runningFlows = new ConcurrentHashMap<>();
+    /** Debug sessions: sessionId -> session state (in-memory, non-persistent). */
+    private final ConcurrentHashMap<String, DebugSession> debugSessions = new ConcurrentHashMap<>();
 
     public FlowEngine(TaskFlowConfigService taskFlowConfigService,
                       FlowExecutor flowExecutor,
@@ -41,16 +43,87 @@ public class FlowEngine {
     // =================================================================
     public FlowExecutionContext executeFlow(Long configId) {
         log.info("Starting flow execution for config id: {}", configId);
+        return executeFlowInternal(configId, null);
+    }
 
+    public CompletableFuture<FlowExecutionContext> executeFlowAsync(Long configId) {
+        return CompletableFuture.supplyAsync(() -> executeFlow(configId));
+    }
+
+    // =================================================================
+    //  Debug execution (realtime logs in memory, no DB querying)
+    // =================================================================
+    public String startDebugSession(Long configId) {
         TaskFlowConfig config = taskFlowConfigService.getById(configId);
         if (config == null) {
             throw new RuntimeException("TaskFlowConfig not found with id: " + configId);
+        }
+        if (config.getFlowJson() == null || config.getFlowJson().isEmpty()) {
+            throw new RuntimeException("Flow not configured yet");
+        }
+
+        String sessionId = UUID.randomUUID().toString();
+        DebugSession session = new DebugSession(sessionId, configId);
+        debugSessions.put(sessionId, session);
+
+        CompletableFuture.runAsync(() -> runDebugSession(configId, sessionId));
+        return sessionId;
+    }
+
+    public Map<String, Object> getDebugSessionLogs(Long configId, String sessionId, int offset) {
+        DebugSession session = debugSessions.get(sessionId);
+        if (session == null || !session.configId.equals(configId)) {
+            throw new RuntimeException("Debug session not found");
+        }
+
+        int safeOffset = Math.max(offset, 0);
+        List<ExecutionLogEntry> allLogs = session.context.getExecutionLog();
+        int size = allLogs.size();
+        int from = Math.min(safeOffset, size);
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("sessionId", sessionId);
+        resp.put("status", session.status);
+        resp.put("logs", new ArrayList<>(allLogs.subList(from, size)));
+        resp.put("nextOffset", size);
+        resp.put("startedAt", session.startedAt.toString());
+        resp.put("finishedAt", session.finishedAt != null ? session.finishedAt.toString() : null);
+        if (!"RUNNING".equals(session.status)) {
+            resp.put("variables", session.context.getVariables());
+        }
+        return resp;
+    }
+
+    private void runDebugSession(Long configId, String sessionId) {
+        DebugSession session = debugSessions.get(sessionId);
+        if (session == null) {
+            return;
+        }
+        try {
+            FlowExecutionContext context = session.context;
+            executeFlowInternal(configId, context);
+            session.status = context.isCompleted() ? "SUCCESS" : "FAILED";
+        } catch (Exception e) {
+            session.context.addLog("ERROR", "执行异常: " + e.getMessage(), "SYSTEM", "Engine", null, null);
+            session.status = "ERROR";
+        } finally {
+            session.finishedAt = LocalDateTime.now();
+        }
+    }
+
+    private FlowExecutionContext executeFlowInternal(Long configId, FlowExecutionContext existingContext) {
+        TaskFlowConfig config = taskFlowConfigService.getById(configId);
+        if (config == null) {
+            throw new RuntimeException("TaskFlowConfig not found with id: " + configId);
+        }
+        if (config.getFlowJson() == null || config.getFlowJson().isEmpty()) {
+            throw new RuntimeException("Flow not configured yet");
         }
 
         try {
             FlowDefinition flowDefinition = FlowJsonSupport.parseFlowDefinition(config.getFlowJson(), objectMapper);
 
-            FlowExecutionContext context = new FlowExecutionContext();
+            FlowExecutionContext context = existingContext != null ? existingContext : new FlowExecutionContext();
             context.setFlowConfigId(String.valueOf(configId));
             context.setFlowName(config.getName());
             context.setFlowType(config.getFlowType());
@@ -67,8 +140,6 @@ public class FlowEngine {
                 }
             }
 
-            // EVENT 触发：仅当流程里存在「等待外部先推数据」类节点时，才提示「等待数据传入」。
-            // 例如仅 TCP 主动连接发送、无 TCP_SERVER(RECEIVE)/TCP_LISTEN 时，应直接执行，避免误导。
             if ("EVENT".equals(config.getTriggerType())) {
                 if (flowContainsInboundWaitNodes(flowDefinition)) {
                     context.addLog("INFO", "监听事务类任务启动，等待数据传入...", "SYSTEM", "Engine", null, null);
@@ -78,17 +149,13 @@ public class FlowEngine {
             }
 
             tcpTaskStartupValidator.validateBeforeRun(config, flowDefinition);
-
             context.addLog("INFO", "Flow config loaded: " + config.getName(), "SYSTEM", "Engine", null, null);
             flowExecutor.execute(flowDefinition, context);
 
             config.setLastExecutionStatus(context.isCompleted() ? "SUCCESS" : "FAILED");
             config.setLastExecutionTime(LocalDateTime.now());
             taskFlowConfigService.updateById(config);
-
-            log.info("Flow execution completed for config id: {}, status: {}",
-                    configId, config.getLastExecutionStatus());
-
+            log.info("Flow execution completed for config id: {}, status: {}", configId, config.getLastExecutionStatus());
             return context;
         } catch (Exception e) {
             log.error("Flow execution failed for config id: {}", configId, e);
@@ -97,10 +164,6 @@ public class FlowEngine {
             taskFlowConfigService.updateById(config);
             throw new RuntimeException("Flow execution failed: " + e.getMessage(), e);
         }
-    }
-
-    public CompletableFuture<FlowExecutionContext> executeFlowAsync(Long configId) {
-        return CompletableFuture.supplyAsync(() -> executeFlow(configId));
     }
 
     // =================================================================
@@ -317,6 +380,18 @@ public class FlowEngine {
             this.configId = configId;
             this.name = name;
             this.intervalMs = Math.max(intervalMs, 100); // minimum 100ms
+        }
+    }
+
+    private static class DebugSession {
+        final Long configId;
+        final LocalDateTime startedAt = LocalDateTime.now();
+        volatile LocalDateTime finishedAt;
+        volatile String status = "RUNNING";
+        volatile FlowExecutionContext context = new FlowExecutionContext();
+
+        DebugSession(String sessionId, Long configId) {
+            this.configId = configId;
         }
     }
 

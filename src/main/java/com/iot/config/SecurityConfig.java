@@ -37,6 +37,12 @@ public class SecurityConfig {
                 .defaultSuccessUrl("/", true)
                 .permitAll()
             )
+            .rememberMe(remember -> remember
+                // 固定key确保重启后remember-me令牌仍可校验
+                .key("iot-device-management-remember-me-key")
+                .tokenValiditySeconds(30 * 24 * 60 * 60)
+                .alwaysRemember(true)
+            )
             .logout(logout -> logout
                 .logoutUrl("/logout")
                 .logoutSuccessUrl("/login.html")

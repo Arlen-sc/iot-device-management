@@ -69,6 +69,7 @@ src/main/java/com/iot/
 │   │   └── FlowExecutionContext.java # 执行上下文
 │   ├── model/
 │   │   ├── FlowDefinition.java      # 流程定义（nodes+edges+variables）
+│   │   ├── FlowJsonSupport.java     # X6 cells JSON → FlowDefinition 转换
 │   │   └── FlowNode.java            # 节点模型
 │   ├── node/
 │   │   ├── NodeHandler.java          # 节点处理器接口
@@ -166,6 +167,8 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 ```
 
 ### 4.3 流程定义格式 (flow_json)
+
+设计器（AntV X6）保存的是 **`cells` 画布 JSON**；后端在 **`FlowJsonSupport.parseFlowDefinition`** 中将其转换为引擎使用的 **`nodes` + `edges`**。若 `flow_json` 已是标准 `nodes` 格式（如测试用例、手工导入），则直接解析。
 
 ```json
 {
@@ -446,37 +449,39 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 
 ### 5.5 通信集成
 
-#### TCP_CLIENT（TCP客户端）⭐ 统一TCP客户端节点
+#### TCP_CLIENT（TCP 客户端）⭐ 设计器主入口
 
-连接TCP服务器，发送数据，接收响应。
+连接对端 TCP 服务，可选发送数据并可选接收响应。旧画布中的 **`TCP_SEND`** 节点与 `TCP_CLIENT` 等价（后端 `TcpSendNodeHandler` 委托同一套逻辑）。
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
-| host | - | 目标地址 |
-| port | - | 目标端口 |
-| sendData | "" | 发送数据（支持${var}） |
-| sendHex | false | 是否以hex字节发送 |
-| waitResponse | true | 是否等待响应 |
+| host | - | 对端地址 |
+| port | - | 对端端口 |
+| sendData | "" | 发送内容（支持${var}，可空） |
+| sendHex | false | 是否按 hex 字节发送 |
+| waitResponse | false | 是否等待对端响应（未配置时默认 false） |
 | timeout | 5000 | 超时毫秒数 |
 | readMode | LINE | LINE/LENGTH/DELIMITER/RAW |
-| readLength | 1024 | LENGTH/RAW模式的读取字节数 |
+| readLength | 1024 | LENGTH/RAW 模式读取字节数 |
 | outputVariable | tcpClientData | 响应存入变量 |
 
 #### TCP_LISTEN（TCP监听）⚠️ 建议使用TCP_CLIENT替代
 
 功能是TCP_CLIENT的子集（只读不写），内部已委托给TCP_CLIENT执行。
 
-#### TCP_SERVER（TCP服务器）
+#### TCP_SERVER（TCP 服务端）
 
-管理TCP服务器生命周期。
+本机监听端口，与 `TcpServerManager` 配合；设计器中单独提供「TCP 服务端」节点。
 
 | 配置项 | 说明 |
 |---|---|
-| port | 服务器端口 |
-| operation | START / BROADCAST / RECEIVE / STOP |
-| sendData | BROADCAST时的发送数据 |
-| timeout | RECEIVE时的等待超时 |
-| outputVariable | 结果变量 |
+| port | 监听端口 |
+| operation | START（启动/复用监听）/ BROADCAST / RECEIVE / STOP |
+| sendData | BROADCAST 时下发内容（支持 hex 开关） |
+| sendHex | BROADCAST 时是否按 hex 解析 |
+| timeout | RECEIVE 等待超时 |
+| outputVariable | RECEIVE 写入变量 |
+| cleanupOnStop | STOP 时是否清理本任务 eventId 队列 |
 
 #### HTTP_REQUEST（HTTP请求）
 
@@ -640,8 +645,10 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 - **添加节点：** 点击左侧面板中的节点类型
 - **连接节点：** 从源节点输出端口拖拽到目标节点输入端口
 - **配置节点：** 点击节点，右侧面板显示配置表单
-- **删除：** 选中节点/边后按Delete键
+- **删除：** 选中节点/边后按Delete键，或在画布中右键节点/连线选择“删除”
 - **保存：** 点击工具栏保存按钮
+- **调试日志：** 调试控制台使用内存实时日志会话（打开后创建会话并增量拉取），不从数据库读取；“清空”仅清空当前界面显示，不影响数据库日志
+- **登录保持：** 系统启用 remember-me（30天），后端重启后在 cookie 未过期且未主动退出的情况下可自动恢复登录
 
 ### 8.3 变量引用规则
 

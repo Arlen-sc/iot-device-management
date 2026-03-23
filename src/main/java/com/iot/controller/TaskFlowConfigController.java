@@ -98,6 +98,27 @@ public class TaskFlowConfigController {
         }
     }
 
+    @PostMapping("/{id}/debug/start")
+    public R<?> startDebug(@PathVariable Long id) {
+        try {
+            String sessionId = flowEngine.startDebugSession(id);
+            return R.ok(Map.of("sessionId", sessionId));
+        } catch (Exception e) {
+            return R.error("Start debug failed: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/debug/{sessionId}/logs")
+    public R<?> getDebugLogs(@PathVariable Long id,
+                             @PathVariable String sessionId,
+                             @RequestParam(defaultValue = "0") int offset) {
+        try {
+            return R.ok(flowEngine.getDebugSessionLogs(id, sessionId, offset));
+        } catch (Exception e) {
+            return R.error("Get debug logs failed: " + e.getMessage());
+        }
+    }
+
     @PostMapping("/{id}/start")
     public R<?> startContinuous(@PathVariable Long id,
                                 @RequestParam(defaultValue = "1000") int interval) {

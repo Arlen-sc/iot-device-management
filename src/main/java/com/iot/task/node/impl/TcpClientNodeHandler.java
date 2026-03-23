@@ -23,7 +23,7 @@ import java.util.Map;
  *   port             - target port (required)
  *   sendData         - data to send (supports ${variable} placeholders)
  *   sendHex          - if true, sendData is treated as hex string and converted to bytes
- *   waitResponse     - whether to wait for a response (default true)
+ *   waitResponse     - whether to wait for a response (default false，与设计器一致)
  *   timeout          - socket timeout in ms (default 5000)
  *   charset          - character encoding (default UTF-8)
  *   readMode         - LINE | LENGTH | DELIMITER (default LINE)
@@ -53,7 +53,7 @@ public class TcpClientNodeHandler implements NodeHandler {
             int timeout = toInt(config.get("timeout"), 5000);
             String charsetName = (String) config.getOrDefault("charset", "UTF-8");
             String readMode = (String) config.getOrDefault("readMode", "LINE");
-            boolean waitResponse = toBool(config.get("waitResponse"), true);
+            boolean waitResponse = toBool(config.get("waitResponse"), false);
             boolean sendHex = toBool(config.get("sendHex"), false);
             String outputVar = (String) config.getOrDefault("outputVariable", "tcpClientData");
 

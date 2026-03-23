@@ -4,10 +4,10 @@ import com.iot.entity.Device;
 import com.iot.util.VariablePathUtils;
 import lombok.Data;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Data
@@ -26,7 +26,7 @@ public class FlowExecutionContext {
     private boolean continuousExecution;
     private String eventId;
     private boolean completed;
-    private List<ExecutionLogEntry> executionLog = new ArrayList<>();
+    private List<ExecutionLogEntry> executionLog = new CopyOnWriteArrayList<>();
 
     /** Guards against infinite loops (e.g. TCP RECEIVE + CONDITION retry). */
     private final AtomicInteger executionStepCount = new AtomicInteger(0);
