@@ -6,6 +6,7 @@ import AppLayout from './components/AppLayout';
 import TaskList from './pages/TaskList';
 import DeviceList from './pages/DeviceList';
 import CategoryList from './pages/CategoryList';
+import DataSourceList from './pages/DataSourceList';
 import Designer from './pages/Designer';
 
 function App() {
@@ -52,9 +53,9 @@ function App() {
           <Route path="/tasks" element={<AppLayout><TaskList /></AppLayout>} />
           <Route path="/devices" element={<AppLayout><DeviceList /></AppLayout>} />
           <Route path="/categories" element={<AppLayout><CategoryList /></AppLayout>} />
+          <Route path="/datasources" element={<AppLayout><DataSourceList /></AppLayout>} />
           
           {/* Fallback for un-migrated pages */}
-          <Route path="/datasources" element={<AppLayout><div className="page-container">数据源管理 (正在迁移至 React...)</div></AppLayout>} />
           <Route path="/bridges" element={<AppLayout><div className="page-container">数据桥接 (正在迁移至 React...)</div></AppLayout>} />
           <Route path="/alerts" element={<AppLayout><div className="page-container">告警管理 (正在迁移至 React...)</div></AppLayout>} />
         </Routes>

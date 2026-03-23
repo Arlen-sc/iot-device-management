@@ -1,6 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Form, Input, InputNumber, Select, Button, Space, Switch } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import api from '../utils/api';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -9,6 +10,26 @@ const { Option } = Select;
 const NodeForm = ({ nodeData, onSave }) => {
   const [form] = Form.useForm();
   const type = nodeData.type;
+  const [deviceOptions, setDeviceOptions] = useState([]);
+  const [deviceDataList, setDeviceDataList] = useState([]);
+  const [operationTypes, setOperationTypes] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState(null);
+  const [selectedOpDesc, setSelectedOpDesc] = useState('');
+
+  // 监听选中设备的变化，以便展示设备信息
+  const handleDeviceChange = (val) => {
+    const dev = deviceDataList.find(d => String(d.id) === String(val));
+    setSelectedDevice(dev || null);
+  };
+
+  // 监听操作类型的变化，以便展示操作说明
+  const handleOperationChange = (val) => {
+    const op = operationTypes.find(o => String(o.code || o.id) === String(val));
+    setSelectedOpDesc(op?.description || '');
+  };
+
+  // 需要动态监控表单字段以控制条件渲染
+  const dataOperation = Form.useWatch('operation', form);
 
   useEffect(() => {
     let initialValues = { ...nodeData.config } || { name: type };
@@ -37,8 +58,61 @@ const NodeForm = ({ nodeData, onSave }) => {
       });
     }
 
+    if (initialValues.params && Array.isArray(initialValues.params)) {
+      initialValues.paramsList = initialValues.params;
+    }
+
     form.setFieldsValue(initialValues);
-  }, [nodeData, form, type]);
+
+    // Initial triggers for side effects
+    if (type === 'DEVICE_CONTROL' || type === 'DEVICE_DATA') {
+      if (initialValues.deviceId) handleDeviceChange(initialValues.deviceId);
+      if (initialValues.operationType) handleOperationChange(initialValues.operationType);
+    }
+  }, [nodeData, form, type, deviceDataList, operationTypes]);
+
+  useEffect(() => {
+    const loadDevices = async () => {
+      try {
+        const res = await api.get('/devices');
+        setDeviceDataList(res || []);
+        const list = (res || []).map(item => ({
+          label: `${item.name || '未命名设备'} (ID:${item.id})`,
+          value: String(item.id)
+        }));
+        setDeviceOptions(list);
+      } catch (e) {
+        setDeviceOptions([]);
+        setDeviceDataList([]);
+      }
+    };
+    
+    const loadOperations = async () => {
+      try {
+        // Fallback for demo if API doesn't exist yet
+        let res;
+        try {
+          res = await api.get('/operation-types');
+        } catch (_) {
+          res = [
+            { code: 'light_on', name: '开灯', description: '打开设备的主控开关。需要参数：无。' },
+            { code: 'light_off', name: '关灯', description: '关闭设备的主控开关。需要参数：无。' },
+            { code: 'set_temp', name: '设置温度', description: '调节空调或温控设备的设定温度。需要参数：temperature (整数，单位℃)' },
+            { code: 'reboot', name: '重启设备', description: '向设备下发软重启指令，设备将在一分钟内离线并重新上线。' },
+            { code: 'read_status', name: '读取状态', description: '主动拉取设备的最新全量运行状态数据。' }
+          ];
+        }
+        setOperationTypes(res || []);
+      } catch (e) {
+        setOperationTypes([]);
+      }
+    };
+
+    loadDevices();
+    if (type === 'DEVICE_CONTROL') {
+      loadOperations();
+    }
+  }, [type]);
 
   const handleFinish = (values) => {
     // 预处理一些特殊的嵌套数据格式
@@ -66,6 +140,13 @@ const NodeForm = ({ nodeData, onSave }) => {
         }
         return branch;
       });
+    }
+
+    if (type === 'DEVICE_CONTROL') {
+      if (values.paramsList) {
+        // Convert paramsList array back to the expected map/object structure or keep it as array if backend prefers
+        values.params = values.paramsList;
+      }
     }
 
     onSave({
@@ -275,6 +356,318 @@ const NodeForm = ({ nodeData, onSave }) => {
                 </>
               )}
             </Form.List>
+          </>
+        );
+
+      case 'DB_OPERATION':
+        return (
+          <>
+            <Form.Item name="operation" label="操作类型" initialValue="SELECT">
+              <Select>
+                <Option value="SELECT">查询 (SELECT)</Option>
+                <Option value="INSERT">插入 (INSERT)</Option>
+                <Option value="UPDATE">更新 (UPDATE)</Option>
+                <Option value="DELETE">删除 (DELETE)</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="tableName" label="表名" rules={[{ required: false }]} help="使用自定义 SQL 时可不填">
+              <Input placeholder="输入数据库表名" />
+            </Form.Item>
+            <Form.Item name="sql" label="自定义 SQL (可选)">
+              <TextArea rows={3} placeholder="如输入此项，将优先执行自定义 SQL。支持 ${var} 占位符" />
+            </Form.Item>
+            <Form.Item name="outputVariable" label="输出变量名 (仅查询)">
+              <Input placeholder="查询结果存入此变量" />
+            </Form.Item>
+          </>
+        );
+
+      case 'DATA_CLEANING':
+        return (
+          <>
+            <Form.Item name="enableNullCheck" label="启用空值检查" valuePropName="checked" initialValue={true}>
+              <Switch />
+            </Form.Item>
+            <Form.Item name="enableRangeCheck" label="启用范围检查" valuePropName="checked" initialValue={true}>
+              <Switch />
+            </Form.Item>
+            <Form.Item name="enableZScore" label="启用 Z-Score 异常检测" valuePropName="checked" initialValue={false}>
+              <Switch />
+            </Form.Item>
+            <Form.Item name="zScoreThreshold" label="Z-Score 阈值" initialValue={3.0}>
+              <InputNumber min={0.1} step={0.1} style={{ width: '100%' }} />
+            </Form.Item>
+          </>
+        );
+        
+      case 'DEVICE_DATA':
+        return (
+          <>
+            <Form.Item name="deviceId" label="目标设备" rules={[{ required: true }]}>
+              <Select
+                placeholder="请选择要操作的设备"
+                showSearch
+                allowClear
+                options={deviceOptions}
+                optionFilterProp="label"
+                onChange={handleDeviceChange}
+              />
+            </Form.Item>
+
+            {/* 动态设备信息展示面板 */}
+            {selectedDevice && (
+              <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '6px', marginBottom: '24px', fontSize: '13px' }}>
+                <div style={{ marginBottom: '4px' }}>
+                  <span style={{ color: '#888', marginRight: '8px' }}>设备名称:</span>
+                  <strong>{selectedDevice.name}</strong>
+                </div>
+                <div style={{ marginBottom: '4px' }}>
+                  <span style={{ color: '#888', marginRight: '8px' }}>通信协议:</span>
+                  <span style={{ color: '#1890ff' }}>{selectedDevice.protocolType || '未知'}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#888', marginRight: '8px' }}>当前状态:</span>
+                  <span style={{ color: selectedDevice.status === 'ONLINE' ? '#52c41a' : '#ff4d4f' }}>
+                    {selectedDevice.status === 'ONLINE' ? '🟢 在线' : '🔴 离线'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <Form.Item name="operation" label="数据操作" initialValue="READ">
+              <Select>
+                <Option value="READ">读取属性 (READ)</Option>
+                <Option value="WRITE">设置属性 (WRITE)</Option>
+              </Select>
+            </Form.Item>
+
+            <Form.Item name="pointCode" label="属性编码 (Property Key)" rules={[{ required: true }]}>
+              <Input placeholder="例如: temperature, humidity, switch_status" />
+            </Form.Item>
+
+            {dataOperation === 'WRITE' && (
+              <Form.Item name="writeValue" label="要写入的值">
+                <Input placeholder="支持固定值或 ${变量名}" />
+              </Form.Item>
+            )}
+
+            {dataOperation !== 'WRITE' && (
+              <Form.Item name="outputVariable" label="输出变量名">
+                <Input placeholder="读取结果将存入此变量，如: deviceTemp" />
+              </Form.Item>
+            )}
+          </>
+        );
+
+      case 'DEVICE_CONTROL':
+        return (
+          <>
+            <Form.Item name="deviceId" label="目标设备" rules={[{ required: true }]}>
+              <Select
+                placeholder="必须指定要控制的具体设备"
+                showSearch
+                allowClear
+                options={deviceOptions}
+                optionFilterProp="label"
+                onChange={handleDeviceChange}
+              />
+            </Form.Item>
+
+            {/* 动态设备信息展示面板 */}
+            {selectedDevice && (
+              <div style={{ background: '#f5f5f5', padding: '12px', borderRadius: '6px', marginBottom: '24px', fontSize: '13px' }}>
+                <div style={{ marginBottom: '4px' }}>
+                  <span style={{ color: '#888', marginRight: '8px' }}>设备名称:</span>
+                  <strong>{selectedDevice.name}</strong>
+                </div>
+                <div style={{ marginBottom: '4px' }}>
+                  <span style={{ color: '#888', marginRight: '8px' }}>通信协议:</span>
+                  <span style={{ color: '#1890ff' }}>{selectedDevice.protocolType || '未知'}</span>
+                </div>
+                <div>
+                  <span style={{ color: '#888', marginRight: '8px' }}>当前状态:</span>
+                  <span style={{ color: selectedDevice.status === 'ONLINE' ? '#52c41a' : '#ff4d4f' }}>
+                    {selectedDevice.status === 'ONLINE' ? '🟢 在线' : '🔴 离线'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <Form.Item name="operationType" label="操作类型" rules={[{ required: true }]}>
+              <Select 
+                placeholder="请选择要执行的控制指令" 
+                onChange={handleOperationChange}
+              >
+                {operationTypes.map(op => (
+                  <Option key={op.code} value={op.code}>
+                    {op.name} ({op.code})
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+
+            {/* 动态操作说明展示 */}
+            {selectedOpDesc && (
+              <div style={{ color: '#fa8c16', fontSize: '12px', marginBottom: '24px', marginTop: '-12px', lineHeight: '1.5' }}>
+                💡 <strong>指令说明:</strong> {selectedOpDesc}
+              </div>
+            )}
+
+            <div style={{ marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>指令参数设置</div>
+            <div style={{ color: '#888', fontSize: '12px', marginBottom: '16px', lineHeight: '1.4' }}>
+              根据上方选择的【操作类型】，在此处配置需要下发给设备的具体参数键值对。
+              <br/>例如控制空调时：参数名(键)填 <code>temperature</code>，参数值填 <code>26</code>。
+            </div>
+
+            <Form.List name="paramsList">
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map(({ key, name, ...restField }) => (
+                    <Space key={key} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'key']}
+                        rules={[{ required: true, message: '请输入参数名' }]}
+                      >
+                        <Input placeholder="参数名 (如: color)" />
+                      </Form.Item>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'value']}
+                        rules={[{ required: true, message: '请输入参数值' }]}
+                      >
+                        <Input placeholder="参数值 (支持 ${var})" />
+                      </Form.Item>
+                      <MinusCircleOutlined onClick={() => remove(name)} style={{ color: '#ff4d4f' }} />
+                    </Space>
+                  ))}
+                  <Form.Item>
+                    <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                      添加参数
+                    </Button>
+                  </Form.Item>
+                </>
+              )}
+            </Form.List>
+
+            <Form.Item name="timeout" label="超时时间 (ms)" initialValue={5000}>
+              <InputNumber min={100} style={{ width: '100%' }} />
+            </Form.Item>
+          </>
+        );
+
+      case 'TCP_SEND':
+        return (
+          <>
+            <Form.Item name="host" label="目标主机" rules={[{ required: true }]}>
+              <Input placeholder="127.0.0.1" />
+            </Form.Item>
+            <Form.Item name="port" label="目标端口" rules={[{ required: true }]}>
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="sendData" label="发送数据" rules={[{ required: true }]}>
+              <Input placeholder="输入发送内容，支持 ${var}" />
+            </Form.Item>
+            <Form.Item name="sendHex" label="作为十六进制发送" valuePropName="checked">
+              <Switch />
+            </Form.Item>
+            <Form.Item name="waitResponse" label="等待响应" valuePropName="checked" initialValue={false}>
+              <Switch />
+            </Form.Item>
+          </>
+        );
+
+      case 'TCP_LISTEN':
+        return (
+          <>
+            <Form.Item name="port" label="监听端口" rules={[{ required: true }]}>
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="timeout" label="接收超时 (ms)" initialValue={10000}>
+              <InputNumber min={100} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="outputVariable" label="输出变量名" rules={[{ required: true }]}>
+              <Input placeholder="接收到的数据存入此变量" />
+            </Form.Item>
+          </>
+        );
+
+      case 'DEDUP_FILTER':
+        return (
+          <>
+            <Form.Item name="filterType" label="过滤类型" initialValue="VALUE_CHANGED">
+              <Select>
+                <Option value="VALUE_CHANGED">数值变化 (VALUE_CHANGED)</Option>
+                <Option value="TIME_WINDOW">时间窗口 (TIME_WINDOW)</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="cacheKey" label="缓存键 (唯一标识)" rules={[{ required: true }]}>
+              <Input placeholder="如: device_${deviceId}_status" />
+            </Form.Item>
+            <Form.Item name="compareValue" label="对比值变量名 (仅数值变化)">
+              <Input placeholder="如: payload.status" />
+            </Form.Item>
+            <Form.Item name="timeWindowMs" label="时间窗口 (ms)" initialValue={60000}>
+              <InputNumber min={1000} style={{ width: '100%' }} help="在该时间窗口内相同数据将被过滤" />
+            </Form.Item>
+          </>
+        );
+
+      case 'PLC_READ':
+        return (
+          <>
+            <Form.Item name="ip" label="PLC IP地址" rules={[{ required: true }]}>
+              <Input placeholder="192.168.1.100" />
+            </Form.Item>
+            <Form.Item name="port" label="端口" initialValue={102}>
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="rack" label="机架号 (Rack)" initialValue={0}>
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="slot" label="插槽号 (Slot)" initialValue={1}>
+              <InputNumber min={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="address" label="读取地址" rules={[{ required: true }]}>
+              <Input placeholder="如: DB1.DBW0" />
+            </Form.Item>
+            <Form.Item name="dataType" label="数据类型" initialValue="INT">
+              <Select>
+                <Option value="BOOL">BOOL</Option>
+                <Option value="INT">INT</Option>
+                <Option value="DINT">DINT</Option>
+                <Option value="REAL">REAL</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="outputVariable" label="输出变量名">
+              <Input placeholder="读取结果存入此变量" />
+            </Form.Item>
+          </>
+        );
+
+      case 'PLC_WRITE':
+        return (
+          <>
+            <Form.Item name="ip" label="PLC IP地址" rules={[{ required: true }]}>
+              <Input placeholder="192.168.1.100" />
+            </Form.Item>
+            <Form.Item name="port" label="端口" initialValue={102}>
+              <InputNumber min={1} max={65535} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="address" label="写入地址" rules={[{ required: true }]}>
+              <Input placeholder="如: DB1.DBW0" />
+            </Form.Item>
+            <Form.Item name="dataType" label="数据类型" initialValue="INT">
+              <Select>
+                <Option value="BOOL">BOOL</Option>
+                <Option value="INT">INT</Option>
+                <Option value="DINT">DINT</Option>
+                <Option value="REAL">REAL</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="writeValue" label="写入值" rules={[{ required: true }]}>
+              <Input placeholder="支持固定值或 ${var}" />
+            </Form.Item>
           </>
         );
 

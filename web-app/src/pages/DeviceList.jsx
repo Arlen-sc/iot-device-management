@@ -14,6 +14,9 @@ const DeviceList = () => {
   const [formVisible, setFormVisible] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
   const [form] = Form.useForm();
+  
+  // 监听协议类型变化
+  const protocolType = Form.useWatch('protocolType', form);
 
   const loadData = async () => {
     setLoading(true);
@@ -33,7 +36,17 @@ const DeviceList = () => {
 
   const handleEdit = (record) => {
     setEditingDevice(record);
-    form.setFieldsValue(record);
+    // 处理嵌套的 connectionConfig 回显
+    let initialValues = { ...record };
+    if (record.connectionConfig) {
+        try {
+            const config = JSON.parse(record.connectionConfig);
+            initialValues = { ...initialValues, ...config };
+        } catch(e) {
+            console.error("Failed to parse connection config", e);
+        }
+    }
+    form.setFieldsValue(initialValues);
     setFormVisible(true);
   };
 
@@ -57,11 +70,22 @@ const DeviceList = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      
+      // 提取连接配置信息并序列化为 JSON 字符串
+      const { name, protocolType, description, status, ...configValues } = values;
+      const payload = {
+          name,
+          protocolType,
+          description,
+          status: status || 'OFFLINE',
+          connectionConfig: JSON.stringify(configValues)
+      };
+
       if (editingDevice) {
-        await api.put(`/devices/${editingDevice.id}`, values);
+        await api.put(`/devices/${editingDevice.id}`, payload);
         message.success('修改成功');
       } else {
-        await api.post('/devices', values);
+        await api.post('/devices', payload);
         message.success('添加成功');
       }
       setFormVisible(false);
@@ -69,6 +93,66 @@ const DeviceList = () => {
     } catch (err) {
       if (err.errorFields) return;
       message.error('操作失败: ' + err.message);
+    }
+  };
+
+  const renderConnectionConfig = () => {
+    switch (protocolType) {
+        case 'TCP':
+        case 'MODBUS_TCP':
+        case 'PLC_S7':
+            return (
+                <div style={{ background: '#fafafa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                    <Title level={5} style={{ fontSize: '14px', marginTop: 0 }}>连接配置</Title>
+                    <Form.Item name="ipAddress" label="IP 地址" rules={[{ required: true, message: '请输入设备 IP 地址' }]}>
+                        <Input placeholder="例如: 192.168.1.100" />
+                    </Form.Item>
+                    <Form.Item name="port" label="端口号" rules={[{ required: true, message: '请输入端口号' }]}>
+                        <Input type="number" placeholder="例如: 502" />
+                    </Form.Item>
+                    {protocolType === 'PLC_S7' && (
+                        <>
+                            <Form.Item name="rack" label="机架号 (Rack)" initialValue={0}>
+                                <Input type="number" />
+                            </Form.Item>
+                            <Form.Item name="slot" label="槽号 (Slot)" initialValue={1}>
+                                <Input type="number" />
+                            </Form.Item>
+                        </>
+                    )}
+                </div>
+            );
+        case 'MQTT':
+            return (
+                <div style={{ background: '#fafafa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                    <Title level={5} style={{ fontSize: '14px', marginTop: 0 }}>MQTT 配置</Title>
+                    <Form.Item name="brokerUrl" label="Broker 地址" rules={[{ required: true }]}>
+                        <Input placeholder="例如: tcp://broker.emqx.io:1883" />
+                    </Form.Item>
+                    <Form.Item name="clientId" label="Client ID" rules={[{ required: true }]}>
+                        <Input placeholder="例如: device-001" />
+                    </Form.Item>
+                    <Form.Item name="username" label="用户名">
+                        <Input placeholder="可选" />
+                    </Form.Item>
+                    <Form.Item name="password" label="密码">
+                        <Input.Password placeholder="可选" />
+                    </Form.Item>
+                </div>
+            );
+        case 'HTTP':
+        default:
+            return (
+                 <div style={{ background: '#fafafa', padding: '16px', borderRadius: '8px', marginBottom: '16px' }}>
+                    <Title level={5} style={{ fontSize: '14px', marginTop: 0 }}>HTTP 配置</Title>
+                    <Form.Item name="webhookUrl" label="推送地址 (Webhook)">
+                        <Input placeholder="例如: http://api.example.com/data" />
+                    </Form.Item>
+                    <Form.Item name="authHeader" label="鉴权 Header">
+                        <Input placeholder="可选，例如: Bearer token123" />
+                    </Form.Item>
+                </div>
+            );
     }
   };
 
@@ -147,6 +231,7 @@ const DeviceList = () => {
           <Form.Item name="description" label="描述">
             <TextArea rows={3} />
           </Form.Item>
+          {renderConnectionConfig()}
         </Form>
       </Modal>
     </div>
