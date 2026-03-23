@@ -112,7 +112,7 @@ public class LogNodeHandler implements NodeHandler {
             FlowExecutionLog logRecord = new FlowExecutionLog();
             logRecord.setFlowConfigId(parseFlowConfigId(context.getFlowConfigId()));
             logRecord.setFlowName(context.getFlowName());
-            logRecord.setEventId(context.getEventId());
+            // logRecord.setEventId(context.getEventId());
             logRecord.setNodeId(node.getId());
             logRecord.setNodeName(node.getName());
             logRecord.setActionType(node.getType());

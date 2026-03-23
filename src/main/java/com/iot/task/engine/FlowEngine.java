@@ -58,6 +58,14 @@ public class FlowEngine {
                 }
             }
 
+            // 检查是否是监听事务类任务（EVENT触发类型）
+            if ("EVENT".equals(config.getTriggerType())) {
+                context.addLog("INFO", "监听事务类任务启动，等待数据传入...", "SYSTEM", "Engine", null, null);
+                // 这里可以添加监听逻辑，等待外部数据传入
+                // 例如：监听MQTT消息、HTTP请求、TCP连接等
+                // 当数据传入后，设置到上下文中并继续执行流程
+            }
+
             context.addLog("INFO", "Flow config loaded: " + config.getName(), "SYSTEM", "Engine", null, null);
             flowExecutor.execute(flowDefinition, context);
 

@@ -16,7 +16,7 @@ public class FlowExecutionLog {
 
     private String flowName;
 
-    private String eventId;
+    // private String eventId;
 
     private String nodeId;
 

@@ -22,7 +22,7 @@ public class EndNodeHandler implements NodeHandler {
             log.info("Executing END node: {}", node.getName());
             context.setCompleted(true);
             context.addLog("Flow completed at node: " + node.getName());
-            return NodeResult.ok(context.getVariables());
+            return NodeResult.ok("Flow Ended");
         } catch (Exception e) {
             log.error("Error in END node: {}", node.getName(), e);
             return NodeResult.error("END node failed: " + e.getMessage());

@@ -111,11 +111,9 @@ public class FlowExecutor {
              if (result.getResultData() != null) {
                  context.setVariable("node_" + node.getId() + "_result", result.getResultData());
                  context.addLog("INFO", "【节点执行结果数据】", nodeType, node.getName(), abbreviateLogData(result.getResultData().toString()), null);
-             } else {
-                 // 对于定时任务，如果节点没有返回数据，跳过并完成任务
-                 context.addLog("WARN", "【节点执行警告】没有返回数据", nodeType, node.getName(), null, null);
-                 context.setCompleted(true);
-                 return;
+             } else if (result.getNextNodeIds() == null || result.getNextNodeIds().isEmpty()) {
+                 // 允许无返回数据，但如果明确是取数据节点（如 DB_OPERATION, DEVICE_DATA）没有数据，这里可以由 handler 直接返回 error 或特定的 skip
+                 context.addLog("INFO", "【节点执行无结果数据】", nodeType, node.getName(), null, null);
              }
              context.addLog("INFO", "【节点输出后上下文】", nodeType, node.getName(), abbreviateLogData(context.getVariables().toString()), null);
         }
@@ -172,7 +170,7 @@ public class FlowExecutor {
                 FlowExecutionLog logRecord = new FlowExecutionLog();
                 logRecord.setFlowConfigId(Long.valueOf(context.getFlowConfigId()));
                 logRecord.setFlowName(context.getFlowName());
-                logRecord.setEventId(context.getEventId());
+                // logRecord.setEventId(context.getEventId());
                 logRecord.setNodeId(node.getId());
                 logRecord.setNodeName(node.getName());
                 logRecord.setActionType(nodeType);

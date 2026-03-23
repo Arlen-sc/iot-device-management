@@ -12,15 +12,17 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * TCP_SERVER node - manages TCP server lifecycle and data exchange.
+ * TCP_SERVER 节点 - 管理 TCP 服务器生命周期和数据交换。
+ * 重要：使用 eventId 严格隔离数据，防止串台。
  *
- * Config fields:
- *   port             - server port (required)
- *   operation        - START | BROADCAST | RECEIVE | STOP (required)
- *   sendData         - data to broadcast (for BROADCAST operation, supports ${variable} placeholders)
- *   sendHex          - if true, sendData is treated as hex string
- *   timeout          - receive timeout in ms (default 10000, for RECEIVE operation)
- *   outputVariable   - variable to store received data (default "tcpServerData")
+ * 配置字段：
+ *   port             - 服务器端口（必填）
+ *   operation        - START | BROADCAST | RECEIVE | STOP（必填）
+ *   sendData         - 要广播的数据（BROADCAST 操作使用，支持 ${variable} 占位符）
+ *   sendHex          - 如果为 true，sendData 被视为十六进制字符串
+ *   timeout          - 接收超时（毫秒，默认 10000，RECEIVE 操作使用）
+ *   outputVariable   - 存储接收数据的变量（默认 "tcpServerData"）
+ *   cleanupOnStop    - STOP 操作时是否清理任务队列（默认 true）
  */
 @Slf4j
 @Component
@@ -48,23 +50,28 @@ public class TcpServerNodeHandler implements NodeHandler {
             int port = toInt(config.get("port"), 0);
             String operation = (String) config.getOrDefault("operation", "START");
             String outputVar = (String) config.getOrDefault("outputVariable", "tcpServerData");
+            String eventId = context.getEventId();
 
             if (port <= 0) {
                 return NodeResult.error("TCP_SERVER: valid port is required");
             }
 
+            if (eventId == null) {
+                log.warn("TCP_SERVER node '{}': eventId is null, data isolation may not work!", node.getName());
+            }
+
             switch (operation.toUpperCase()) {
                 case "START" -> {
-                    return handleStart(node, context, port);
+                    return handleStart(node, context, port, eventId);
                 }
                 case "BROADCAST" -> {
-                    return handleBroadcast(node, context, config, port);
+                    return handleBroadcast(node, context, config, port, eventId);
                 }
                 case "RECEIVE" -> {
-                    return handleReceive(node, context, config, port, outputVar);
+                    return handleReceive(node, context, config, port, outputVar, eventId);
                 }
                 case "STOP" -> {
-                    return handleStop(node, context, port);
+                    return handleStop(node, context, config, port, eventId);
                 }
                 default -> {
                     return NodeResult.error("TCP_SERVER: unknown operation: " + operation);
@@ -78,55 +85,74 @@ public class TcpServerNodeHandler implements NodeHandler {
         }
     }
 
-    private NodeResult handleStart(FlowNode node, FlowExecutionContext context, int port) throws Exception {
+    private NodeResult handleStart(FlowNode node, FlowExecutionContext context, 
+                                    int port, String eventId) throws Exception {
         tcpServerManager.startServer(port);
-        context.addLog("TCP server started on port " + port);
-        log.info("TCP_SERVER node '{}': server started on port {}", node.getName(), port);
+        context.addLog("TCP server started on port " + port + 
+                (eventId != null ? " (eventId: " + eventId + ")" : ""));
+        log.info("TCP_SERVER node '{}': server started on port {} (eventId: {})", 
+                node.getName(), port, eventId);
         return NodeResult.ok("Server started on port " + port);
     }
 
     private NodeResult handleBroadcast(FlowNode node, FlowExecutionContext context,
-                                        Map<String, Object> config, int port) throws Exception {
+                                        Map<String, Object> config, int port, String eventId) throws Exception {
         String sendDataRaw = (String) config.get("sendData");
         boolean sendHex = toBool(config.get("sendHex"), false);
         String sendData = sendDataRaw != null ? resolveVariables(sendDataRaw, context) : "";
 
         if (sendHex) {
-            // Convert hex to string for broadcast
             byte[] bytes = TcpClientNodeHandler.hexStringToBytes(sendData);
             sendData = new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
         }
 
-        int clientCount = tcpServerManager.broadcast(port, sendData);
-        context.addLog("TCP server broadcast to " + clientCount + " clients on port " + port);
-        log.info("TCP_SERVER node '{}': broadcast to {} clients on port {}", node.getName(), clientCount, port);
+        int clientCount = tcpServerManager.broadcast(port, eventId, sendData);
+        context.addLog("TCP server broadcast to " + clientCount + " clients on port " + port +
+                (eventId != null ? " (eventId: " + eventId + ")" : ""));
+        log.info("TCP_SERVER node '{}': broadcast to {} clients on port {} (eventId: {})", 
+                node.getName(), clientCount, port, eventId);
         return NodeResult.ok(clientCount);
     }
 
     private NodeResult handleReceive(FlowNode node, FlowExecutionContext context,
-                                      Map<String, Object> config, int port, String outputVar) throws Exception {
+                                      Map<String, Object> config, int port, String outputVar, 
+                                      String eventId) throws Exception {
         int timeout = toInt(config.get("timeout"), 10000);
 
-        context.addLog("TCP server waiting for data on port " + port + " (timeout: " + timeout + "ms)");
-        log.info("TCP_SERVER node '{}': waiting for data on port {} (timeout: {}ms)", node.getName(), port, timeout);
+        context.addLog("TCP server waiting for data on port " + port + 
+                " (timeout: " + timeout + "ms" + 
+                (eventId != null ? ", eventId: " + eventId : "") + ")");
+        log.info("TCP_SERVER node '{}': waiting for data on port {} (timeout: {}ms, eventId: {})", 
+                node.getName(), port, timeout, eventId);
 
-        String received = tcpServerManager.waitForData(port, timeout);
+        String received = tcpServerManager.waitForData(port, eventId, timeout);
 
         if (received == null) {
-            context.addLog("TCP server receive timeout on port " + port);
+            context.addLog("TCP server receive timeout on port " + port +
+                    (eventId != null ? " (eventId: " + eventId + ")" : ""));
             return NodeResult.error("TCP_SERVER receive timeout on port " + port);
         }
 
         context.setVariable(outputVar, received);
         context.addLog("TCP server received: " + abbreviate(received, 120));
-        log.info("TCP_SERVER node '{}': received {} chars on port {}", node.getName(), received.length(), port);
+        log.info("TCP_SERVER node '{}': received {} chars on port {} (eventId: {})", 
+                node.getName(), received.length(), port, eventId);
         return NodeResult.ok(received);
     }
 
-    private NodeResult handleStop(FlowNode node, FlowExecutionContext context, int port) {
+    private NodeResult handleStop(FlowNode node, FlowExecutionContext context,
+                                   Map<String, Object> config, int port, String eventId) {
+        boolean cleanup = toBool(config.get("cleanupOnStop"), true);
+        
+        if (cleanup && eventId != null) {
+            tcpServerManager.cleanupTaskQueue(port, eventId);
+            context.addLog("Cleaned up task queue for eventId: " + eventId);
+        }
+        
         tcpServerManager.stopServer(port);
         context.addLog("TCP server stopped on port " + port);
-        log.info("TCP_SERVER node '{}': server stopped on port {}", node.getName(), port);
+        log.info("TCP_SERVER node '{}': server stopped on port {} (eventId: {})", 
+                node.getName(), port, eventId);
         return NodeResult.ok("Server stopped on port " + port);
     }
 
