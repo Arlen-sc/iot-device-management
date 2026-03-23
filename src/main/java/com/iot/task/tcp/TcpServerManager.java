@@ -24,11 +24,12 @@ public class TcpServerManager {
 
     /**
      * 在给定端口启动 TCP 服务器（如果尚未运行）。
+     * @return true 表示本次新建了监听；false 表示该端口已有本进程托管的服务（复用）
      */
-    public synchronized void startServer(int port) throws IOException {
+    public synchronized boolean startServer(int port) throws IOException {
         if (servers.containsKey(port)) {
             log.info("TCP server already running on port {}", port);
-            return;
+            return false;
         }
 
         ServerSocket serverSocket = new ServerSocket(port);
@@ -42,6 +43,7 @@ public class TcpServerManager {
         server.acceptThread = acceptThread;
 
         log.info("TCP server started on port {}", port);
+        return true;
     }
 
     /**

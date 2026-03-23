@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iot.entity.TaskFlowConfig;
 import com.iot.service.TaskFlowConfigService;
 import com.iot.task.model.FlowDefinition;
+import com.iot.task.model.FlowJsonSupport;
+import com.iot.task.model.FlowNode;
+import com.iot.task.tcp.TcpTaskStartupValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -18,16 +21,19 @@ public class FlowEngine {
     private final TaskFlowConfigService taskFlowConfigService;
     private final FlowExecutor flowExecutor;
     private final ObjectMapper objectMapper;
+    private final TcpTaskStartupValidator tcpTaskStartupValidator;
 
     /** Running continuous flows: configId → runner info. */
     private final ConcurrentHashMap<Long, ContinuousRunner> runningFlows = new ConcurrentHashMap<>();
 
     public FlowEngine(TaskFlowConfigService taskFlowConfigService,
                       FlowExecutor flowExecutor,
-                      ObjectMapper objectMapper) {
+                      ObjectMapper objectMapper,
+                      TcpTaskStartupValidator tcpTaskStartupValidator) {
         this.taskFlowConfigService = taskFlowConfigService;
         this.flowExecutor = flowExecutor;
         this.objectMapper = objectMapper;
+        this.tcpTaskStartupValidator = tcpTaskStartupValidator;
     }
 
     // =================================================================
@@ -42,11 +48,14 @@ public class FlowEngine {
         }
 
         try {
-            FlowDefinition flowDefinition = objectMapper.readValue(config.getFlowJson(), FlowDefinition.class);
+            FlowDefinition flowDefinition = FlowJsonSupport.parseFlowDefinition(config.getFlowJson(), objectMapper);
 
             FlowExecutionContext context = new FlowExecutionContext();
             context.setFlowConfigId(String.valueOf(configId));
             context.setFlowName(config.getName());
+            context.setFlowType(config.getFlowType());
+            context.setExecutionMode(config.getExecutionMode());
+            context.setContinuousExecution(false);
 
             if (flowDefinition.getVariables() != null) {
                 for (Map<String, Object> variable : flowDefinition.getVariables()) {
@@ -58,13 +67,17 @@ public class FlowEngine {
                 }
             }
 
-            // 检查是否是监听事务类任务（EVENT触发类型）
+            // EVENT 触发：仅当流程里存在「等待外部先推数据」类节点时，才提示「等待数据传入」。
+            // 例如仅 TCP 主动连接发送、无 TCP_SERVER(RECEIVE)/TCP_LISTEN 时，应直接执行，避免误导。
             if ("EVENT".equals(config.getTriggerType())) {
-                context.addLog("INFO", "监听事务类任务启动，等待数据传入...", "SYSTEM", "Engine", null, null);
-                // 这里可以添加监听逻辑，等待外部数据传入
-                // 例如：监听MQTT消息、HTTP请求、TCP连接等
-                // 当数据传入后，设置到上下文中并继续执行流程
+                if (flowContainsInboundWaitNodes(flowDefinition)) {
+                    context.addLog("INFO", "监听事务类任务启动，等待数据传入...", "SYSTEM", "Engine", null, null);
+                } else {
+                    context.addLog("INFO", "事件触发任务启动，立即执行流程（当前流程无「等待外部数据」类节点）", "SYSTEM", "Engine", null, null);
+                }
             }
+
+            tcpTaskStartupValidator.validateBeforeRun(config, flowDefinition);
 
             context.addLog("INFO", "Flow config loaded: " + config.getName(), "SYSTEM", "Engine", null, null);
             flowExecutor.execute(flowDefinition, context);
@@ -111,6 +124,15 @@ public class FlowEngine {
         }
         if (config.getFlowJson() == null || config.getFlowJson().isEmpty()) {
             throw new RuntimeException("Flow not configured yet");
+        }
+
+        try {
+            FlowDefinition fd = FlowJsonSupport.parseFlowDefinition(config.getFlowJson(), objectMapper);
+            tcpTaskStartupValidator.validateBeforeRun(config, fd);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e.getMessage(), e);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to validate flow: " + e.getMessage(), e);
         }
 
         ContinuousRunner runner = new ContinuousRunner(configId, config.getName(), intervalMs);
@@ -200,10 +222,14 @@ public class FlowEngine {
                     break;
                 }
 
-                FlowDefinition flowDefinition = objectMapper.readValue(config.getFlowJson(), FlowDefinition.class);
+                FlowDefinition flowDefinition = FlowJsonSupport.parseFlowDefinition(config.getFlowJson(), objectMapper);
 
                 FlowExecutionContext context = new FlowExecutionContext();
                 context.setFlowConfigId(String.valueOf(runner.configId));
+                context.setFlowName(config.getName());
+                context.setFlowType(config.getFlowType());
+                context.setExecutionMode(config.getExecutionMode());
+                context.setContinuousExecution(true);
 
                 if (flowDefinition.getVariables() != null) {
                     for (Map<String, Object> variable : flowDefinition.getVariables()) {
@@ -292,5 +318,53 @@ public class FlowEngine {
             this.name = name;
             this.intervalMs = Math.max(intervalMs, 100); // minimum 100ms
         }
+    }
+
+    /**
+     * 是否与「引擎先阻塞等待外部设备/客户端推数据」的语义相关（用于 EVENT 提示文案）。
+     */
+    static boolean flowContainsInboundWaitNodes(FlowDefinition flow) {
+        if (flow == null || flow.getNodes() == null) {
+            return false;
+        }
+        for (FlowNode n : flow.getNodes()) {
+            if (n == null || n.getType() == null) {
+                continue;
+            }
+            String type = n.getType();
+            Map<String, Object> c = n.getConfig();
+            switch (type) {
+                case "TCP_SERVER" -> {
+                    String op = c == null ? "START" : String.valueOf(c.getOrDefault("operation", "START"));
+                    if ("RECEIVE".equalsIgnoreCase(op.trim())) {
+                        return true;
+                    }
+                }
+                case "TCP_LISTEN" -> {
+                    return true;
+                }
+                case "TCP_CLIENT" -> {
+                    if (c != null && truthyWaitResponse(c.get("waitResponse"))) {
+                        return true;
+                    }
+                }
+                case "TCP_SEND" -> {
+                    // 设计器「TCP 发送」为主动下发，不视为「等待外部数据传入」类任务
+                }
+                default -> {
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean truthyWaitResponse(Object v) {
+        if (v == null) {
+            return false;
+        }
+        if (v instanceof Boolean b) {
+            return b;
+        }
+        return "true".equalsIgnoreCase(String.valueOf(v).trim());
     }
 }

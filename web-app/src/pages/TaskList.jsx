@@ -95,7 +95,13 @@ const TaskList = () => {
       title: '类型', 
       dataIndex: 'flowType', 
       key: 'flowType',
-      render: (type) => ({ DEVICE_CONTROL: '设备控制', DATA_PROCESS: '数据处理', MIXED: '混合' }[type] || type)
+      render: (type) => ({
+        DEVICE_CONTROL: '设备控制',
+        DATA_PROCESS: '数据处理',
+        TCP_CLIENT: 'TCP 客户端',
+        TCP_SERVER: 'TCP 服务端',
+        MIXED: '混合'
+      }[type] || type)
     },
     { 
       title: '触发方式', 

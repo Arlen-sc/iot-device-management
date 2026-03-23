@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Form, Input, InputNumber, Select, Button, Space, Switch } from 'antd';
+import React, { useEffect, useState, useRef } from 'react';
+import { Form, Input, InputNumber, Select, Button, Space, Switch, App } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 
@@ -10,6 +10,9 @@ const { Option } = Select;
 const NodeForm = ({ nodeData, onSave }) => {
   const [form] = Form.useForm();
   const type = nodeData.type;
+  const saveTimeoutRef = useRef(null);
+  const isInitialLoadRef = useRef(true);
+  const { message } = App.useApp();
   const [deviceOptions, setDeviceOptions] = useState([]);
   const [deviceDataList, setDeviceDataList] = useState([]);
   const [operationTypes, setOperationTypes] = useState([]);
@@ -114,45 +117,82 @@ const NodeForm = ({ nodeData, onSave }) => {
     }
   }, [type]);
 
+  // 监听表单值变化，自动保存
+  useEffect(() => {
+    // 不需要额外监听，Form组件的onValuesChange会处理
+  }, [form, onSave, type]);
+
+  // 初始加载完成标记
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      isInitialLoadRef.current = false;
+    }, 300);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleFinish = (values) => {
-    // 预处理一些特殊的嵌套数据格式
-    if (values.operations) {
-      values.operations = values.operations.map(op => {
-        if (op.paramsStr) {
-          try {
-            op.params = JSON.parse(op.paramsStr);
-          } catch (e) {
-            console.error("Invalid JSON in paramsStr:", op.paramsStr);
+    try {
+      console.log('NodeForm handleFinish 被调用, type:', type, 'values:', values);
+      // 创建一个安全的副本，避免修改原始数据
+      const safeValues = { ...values };
+      
+      // 预处理一些特殊的嵌套数据格式
+      if (safeValues.operations && Array.isArray(safeValues.operations)) {
+        safeValues.operations = safeValues.operations.map(op => {
+          if (!op) return op;
+          const safeOp = { ...op };
+          if (safeValues.paramsStr) {
+            try {
+              safeOp.params = JSON.parse(safeOp.paramsStr);
+            } catch (e) {
+              message.error("Invalid JSON in paramsStr:", safeOp.paramsStr);
+            }
+            delete safeOp.paramsStr;
           }
-          delete op.paramsStr;
-        }
-        return op;
-      });
-    }
-
-    if (values.branches) {
-      values.branches = values.branches.map(branch => {
-        if (branch.condition && branch.condition.variable) {
-           branch.condition.left = branch.condition.variable;
-           branch.condition.right = branch.condition.value;
-           delete branch.condition.variable;
-           delete branch.condition.value;
-        }
-        return branch;
-      });
-    }
-
-    if (type === 'DEVICE_CONTROL') {
-      if (values.paramsList) {
-        // Convert paramsList array back to the expected map/object structure or keep it as array if backend prefers
-        values.params = values.paramsList;
+          return safeOp;
+        });
       }
-    }
 
-    onSave({
-      ...nodeData,
-      config: values
-    });
+      if (safeValues.branches && Array.isArray(safeValues.branches)) {
+        safeValues.branches = safeValues.branches.map(branch => {
+          if (!branch) return branch;
+          const safeBranch = { ...branch };
+          if (safeBranch.condition && safeBranch.condition.variable) {
+             safeBranch.condition.left = safeBranch.condition.variable;
+             safeBranch.condition.right = safeBranch.condition.value;
+             delete safeBranch.condition.variable;
+             delete safeBranch.condition.value;
+          }
+          return safeBranch;
+        });
+      }
+
+      if (type === 'DEVICE_CONTROL') {
+        if (safeValues.paramsList && Array.isArray(safeValues.paramsList)) {
+          safeValues.params = safeValues.paramsList;
+        }
+      }
+
+      // 确保onSave存在
+      if (onSave && typeof onSave === 'function') {
+        console.log('调用 onSave, data:', { ...nodeData, config: safeValues });
+        onSave({
+          ...nodeData,
+          config: safeValues
+        });
+      }
+    } catch (err) {
+      message.error('保存节点配置失败:', err.message);
+    }
+  };
+
+  // 处理表单值变化
+  const handleValuesChange = (changedValues, allValues) => {
+    if (isInitialLoadRef.current) {
+      return; // 跳过初始加载
+    }
+    console.log('表单值变化:', allValues);
+    handleFinish(allValues);
   };
 
   const renderSpecificFields = () => {
@@ -201,6 +241,7 @@ const NodeForm = ({ nodeData, onSave }) => {
           </Form.Item>
         );
 
+      case 'TCP_SEND':
       case 'TCP_CLIENT':
         return (
           <>
@@ -222,6 +263,9 @@ const NodeForm = ({ nodeData, onSave }) => {
             <Form.Item name="sendHex" label="作为十六进制发送" valuePropName="checked">
               <Switch />
             </Form.Item>
+            <Form.Item name="waitResponse" label="等待响应" valuePropName="checked" initialValue={false}>
+              <Switch />
+            </Form.Item>
             <Form.Item name="outputVariable" label="输出变量名">
               <Input placeholder="接收到的数据存入此变量" />
             </Form.Item>
@@ -231,27 +275,14 @@ const NodeForm = ({ nodeData, onSave }) => {
           </>
         );
 
+      case 'TCP_LISTEN':
       case 'TCP_SERVER':
         return (
           <>
             <Form.Item name="port" label="监听端口" rules={[{ required: true }]}>
               <InputNumber min={1} max={65535} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="operation" label="服务器操作" initialValue="START">
-              <Select>
-                <Option value="START">启动 (START)</Option>
-                <Option value="STOP">停止 (STOP)</Option>
-                <Option value="BROADCAST">广播 (BROADCAST)</Option>
-                <Option value="RECEIVE">接收数据 (RECEIVE)</Option>
-              </Select>
-            </Form.Item>
-            <Form.Item name="sendData" label="广播数据 (仅BROADCAST)">
-              <Input placeholder="输入广播内容，支持 ${var}" />
-            </Form.Item>
-            <Form.Item name="sendHex" label="作为十六进制广播" valuePropName="checked">
-              <Switch />
-            </Form.Item>
-            <Form.Item name="outputVariable" label="输出变量名 (仅RECEIVE)">
+            <Form.Item name="outputVariable" label="输出变量名" rules={[{ required: true }]}>
               <Input placeholder="接收到的数据存入此变量" />
             </Form.Item>
             <Form.Item name="timeout" label="接收超时 (ms)" initialValue={10000}>
@@ -681,16 +712,12 @@ const NodeForm = ({ nodeData, onSave }) => {
   };
 
   return (
-    <Form form={form} layout="vertical" onFinish={handleFinish}>
+    <Form form={form} layout="vertical" onValuesChange={handleValuesChange}>
       <Form.Item name="name" label="节点名称" rules={[{ required: true }]}>
         <Input />
       </Form.Item>
       
       {renderSpecificFields()}
-
-      <Form.Item style={{ marginTop: 24, textAlign: 'right' }}>
-        <Button type="primary" htmlType="submit">保存配置</Button>
-      </Form.Item>
     </Form>
   );
 };

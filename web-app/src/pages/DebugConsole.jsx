@@ -1,10 +1,22 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Modal, Button, Tag, Table, Space, message, Spin } from 'antd';
 import api from '../utils/api';
 
 const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState(null);
+  const openedOnceRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible) {
+      openedOnceRef.current = false;
+      return;
+    }
+    if (!taskId || openedOnceRef.current) return;
+    openedOnceRef.current = true;
+    handleRun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅打开时自动跑一次
+  }, [visible, taskId]);
 
   const handleRun = async () => {
     setRunning(true);

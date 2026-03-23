@@ -16,6 +16,14 @@ public class FlowExecutionContext {
     private Map<String, Object> variables = new HashMap<>();
     private String flowConfigId;
     private String flowName;
+    /** 任务配置中的 flowType（如 TCP_CLIENT / TCP_SERVER / MIXED） */
+    private String flowType;
+    /** 任务配置中的 executionMode（如 SINGLE / BY_DEVICE） */
+    private String executionMode;
+    /**
+     * 连续/轮询执行（如 startContinuousFlow）：为 true 时 TCP_SERVER 的 STOP 不关闭监听，避免重复创建服务。
+     */
+    private boolean continuousExecution;
     private String eventId;
     private boolean completed;
     private List<ExecutionLogEntry> executionLog = new ArrayList<>();

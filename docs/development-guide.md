@@ -6,6 +6,7 @@
 2. [技术架构](#2-技术架构)
 3. [数据库设计](#3-数据库设计)
 4. [流程引擎](#4-流程引擎)
+   - [4.4 TCP 任务与启动校验](#44-tcp-任务与启动校验)
 5. [节点类型参考](#5-节点类型参考)
 6. [节点合理性分析与重构记录](#6-节点合理性分析与重构记录)
 7. [API 接口文档](#7-api-接口文档)
@@ -75,7 +76,9 @@ src/main/java/com/iot/
 │   │   ├── NodeHandlerRegistry.java  # 处理器注册中心
 │   │   └── impl/                     # 20个节点实现
 │   └── tcp/
-│       └── TcpServerManager.java     # TCP服务器生命周期管理
+│       ├── TcpServerManager.java      # TCP 服务端生命周期（端口级复用）
+│       ├── TcpFlowAnalysis.java       # 从流程图解析 TCP 端口/对端
+│       └── TcpTaskStartupValidator.java  # 启动前监听端口与对端连通性检查
 └── util/
     ├── R.java                  # 统一响应封装
     ├── VariablePathUtils.java  # 变量路径工具（a.b.c 嵌套访问）
@@ -119,7 +122,7 @@ mybatis-plus:
 | `device_model` | 设备型号 | id, category_id, name, protocol_type, specs_json |
 | `device` | 设备实例 | id, model_id, name, code, status, ip_address, port |
 | `operation_type` | 操作类型 | id, name, code, protocol_type, param_schema |
-| `task_flow_config` | 流程配置 | id, name, flow_json, trigger_type, execution_mode |
+| `task_flow_config` | 流程配置 | id, name, flow_json, flow_type, trigger_type, execution_mode, cron_expression |
 | `alert_config` | 告警规则 | id, name, device_id, condition_json, action_json |
 | `alert_record` | 告警记录 | id, alert_config_id, level, message, data_json |
 | `data_bridge` | 数据桥接 | id, name, source_type/config, target_type/config |
@@ -187,6 +190,55 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
   ]
 }
 ```
+
+### 4.4 TCP 任务与启动校验
+
+任务表 `task_flow_config` 中与执行方式相关的字段包括 **`flow_type`**（流程类型）、**`trigger_type`**（触发方式）、**`execution_mode`**（执行模式）、**`cron_expression`**（定时表达式）。本节说明 **TCP 客户端 / 服务端类任务** 在引擎中的行为约定。
+
+#### 流程类型（flow_type）
+
+| 取值 | 含义 |
+|---|---|
+| `DEVICE_CONTROL` / `DATA_PROCESS` / `MIXED` | 通用分类；TCP 行为以画布节点为准 |
+| `TCP_CLIENT` | 语义上为「主动连接对端」的 TCP 客户端任务 |
+| `TCP_SERVER` | 语义上为「本机监听」的 TCP 服务端任务 |
+
+前端任务表单已提供 **TCP 客户端**、**TCP 服务端** 选项；引擎侧**不单独依赖**该字段做 TCP 校验，而是以流程图中实际出现的节点为准（见下节），避免配置与画布不一致时漏检。
+
+#### 触发方式（trigger_type）
+
+| 取值 | 典型用法 |
+|---|---|
+| `ONCE` | 手动调用 `POST /task-flow-configs/{id}/execute`，单次跑完整流程 |
+| `SCHEDULED` | 定时触发（需外部调度或后续接入调度器调用 execute/start） |
+| `EVENT` | 设备事件触发；若流程中无「等待外部先推数据」类节点，引擎日志会说明将**立即执行**，避免误提示「一直等待数据」 |
+
+#### 单次执行 vs 持续轮询（多线程/循环）
+
+| API | 行为 |
+|---|---|
+| `POST .../execute` | `FlowEngine.executeFlow`：单次执行；`FlowExecutionContext.continuousExecution = false` |
+| `POST .../start?interval=...` | `FlowEngine.startContinuousFlow`：独立线程循环执行；`continuousExecution = true` |
+
+**持续任务下的 TCP 服务端：** 为避免每一轮流程都「关掉再建」监听，当 `continuousExecution == true` 时，`TCP_SERVER` 节点的 **`STOP` 操作不会调用 `stopServer`**，仅按需清理当前 `eventId` 对应队列；**`START` 若端口已由本进程 `TcpServerManager` 托管，则复用监听**（不重复绑定）。客户端向对端发送/广播仍按流程节点顺序执行。
+
+#### 启动前 TCP 资源检查（优先判断服务是否可用）
+
+类 **`TcpTaskStartupValidator`** 在 **`executeFlow` 与 `startContinuousFlow` 真正执行流程之前** 调用，依据 **`TcpFlowAnalysis`** 从流程图收集：
+
+- **TCP_SERVER** 节点中的监听端口：若该端口已由 **`TcpServerManager`** 管理则视为可用；否则尝试临时 `ServerSocket` 绑定，若失败则说明端口被占用，**阻止本次执行**。
+- **TCP_CLIENT / TCP_SEND / TCP_LISTEN** 节点中的 `host:port`：短连接探测对端是否可达；不可达则 **阻止本次执行**。
+
+检查失败抛出 `IllegalStateException`，接口层返回错误信息，任务不会进入节点执行。
+
+#### 相关类
+
+| 类 | 职责 |
+|---|---|
+| `com.iot.task.tcp.TcpFlowAnalysis` | 从 `FlowDefinition` 收集监听端口、客户端对端列表；可解析 TCP 角色（工具/扩展用） |
+| `com.iot.task.tcp.TcpTaskStartupValidator` | 启动前校验监听端口与对端连通性 |
+| `com.iot.task.tcp.TcpServerManager` | 本进程内 TCP 监听生命周期；`startServer` 返回是否本次新建监听（`false` 表示复用） |
+| `FlowExecutionContext` | 承载 `flowType`、`executionMode`、`continuousExecution` 等，供节点处理器区分单次/持续行为 |
 
 ---
 

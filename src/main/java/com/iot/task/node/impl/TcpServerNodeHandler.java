@@ -87,12 +87,12 @@ public class TcpServerNodeHandler implements NodeHandler {
 
     private NodeResult handleStart(FlowNode node, FlowExecutionContext context, 
                                     int port, String eventId) throws Exception {
-        tcpServerManager.startServer(port);
-        context.addLog("TCP server started on port " + port + 
-                (eventId != null ? " (eventId: " + eventId + ")" : ""));
-        log.info("TCP_SERVER node '{}': server started on port {} (eventId: {})", 
-                node.getName(), port, eventId);
-        return NodeResult.ok("Server started on port " + port);
+        boolean created = tcpServerManager.startServer(port);
+        context.addLog((created ? "TCP server started on port " : "TCP server reused (already listening) on port ")
+                + port + (eventId != null ? " (eventId: " + eventId + ")" : ""));
+        log.info("TCP_SERVER node '{}': server {} on port {} (eventId: {})", 
+                node.getName(), created ? "started" : "reused", port, eventId);
+        return NodeResult.ok("Server " + (created ? "started" : "reused") + " on port " + port);
     }
 
     private NodeResult handleBroadcast(FlowNode node, FlowExecutionContext context,
@@ -143,12 +143,19 @@ public class TcpServerNodeHandler implements NodeHandler {
     private NodeResult handleStop(FlowNode node, FlowExecutionContext context,
                                    Map<String, Object> config, int port, String eventId) {
         boolean cleanup = toBool(config.get("cleanupOnStop"), true);
-        
+
         if (cleanup && eventId != null) {
             tcpServerManager.cleanupTaskQueue(port, eventId);
             context.addLog("Cleaned up task queue for eventId: " + eventId);
         }
-        
+
+        if (context.isContinuousExecution()) {
+            context.addLog("TCP server STOP 已跳过（连续/轮询任务保持监听端口，避免重复创建 TCP 服务）");
+            log.info("TCP_SERVER node '{}': STOP skipped (continuous execution), port {} kept open", 
+                    node.getName(), port);
+            return NodeResult.ok("Server kept running (continuous mode)");
+        }
+
         tcpServerManager.stopServer(port);
         context.addLog("TCP server stopped on port " + port);
         log.info("TCP_SERVER node '{}': server stopped on port {} (eventId: {})", 

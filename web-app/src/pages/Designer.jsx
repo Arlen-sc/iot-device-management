@@ -5,7 +5,7 @@ import { Dnd } from '@antv/x6-plugin-dnd';
 import { Snapline } from '@antv/x6-plugin-snapline';
 import { Keyboard } from '@antv/x6-plugin-keyboard';
 import { Selection } from '@antv/x6-plugin-selection';
-import { Menu, Button, message, Space, Modal, Drawer } from 'antd';
+import { Menu, Button, message, Space, Modal } from 'antd';
 import { 
   ZoomInOutlined, 
   ZoomOutOutlined, 
@@ -196,14 +196,15 @@ const Designer = () => {
   const [taskName, setTaskName] = useState('加载中...');
   
   const [selectedNode, setSelectedNode] = useState(null);
-  const [formVisible, setFormVisible] = useState(true);
+  const selectedNodeRef = useRef(null);
   const [debugVisible, setDebugVisible] = useState(false);
 
   const [contextMenu, setContextMenu] = useState({
     visible: false,
     x: 0,
     y: 0,
-    node: null
+    node: null,
+    edge: null
   });
 
   // Initialize Graph
@@ -230,7 +231,7 @@ const Designer = () => {
             attrs: {
               line: { stroke: '#1890ff', strokeWidth: 2, targetMarker: { name: 'block', width: 10, height: 6 } }
             },
-            zIndex: -1,
+            zIndex: 0,
           });
         }
       }
@@ -238,41 +239,76 @@ const Designer = () => {
 
     g.use(new Snapline({ enabled: true }));
     g.use(new Keyboard({ enabled: true }));
-    g.use(new Selection({ enabled: true, rubberband: true, showNodeSelectionBox: true }));
+    g.use(new Selection({ 
+      enabled: true, 
+      rubberband: true, 
+      showNodeSelectionBox: true,
+      multiple: true,
+      movable: true,
+      selectCellOnMousedown: true
+    }));
 
     // Bind keyboard delete
     g.bindKey(['backspace', 'del'], () => {
       const cells = g.getSelectedCells();
       if (cells.length) {
+        const hasSelectedNode = cells.some(cell => cell.isNode() && cell === selectedNodeRef.current);
         g.removeCells(cells);
+        if (hasSelectedNode) {
+          setSelectedNode(null);
+          selectedNodeRef.current = null;
+        }
       }
     });
 
     g.on('node:click', ({ node }) => {
       setSelectedNode(node);
-      setFormVisible(true);
+      selectedNodeRef.current = node;
     });
 
     // Right-click menu for nodes
     g.on('node:contextmenu', ({ node, x, y, e }) => {
       e.preventDefault();
+      e.stopPropagation();
       setContextMenu({
         visible: true,
         x: e.clientX,
         y: e.clientY,
-        node
+        node,
+        edge: null
+      });
+    });
+
+    // Right-click menu for edges
+    g.on('edge:contextmenu', ({ edge, x, y, e }) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        node: null,
+        edge
       });
     });
 
     // Right-click menu for canvas
     g.on('blank:contextmenu', ({ x, y, e }) => {
       e.preventDefault();
+      e.stopPropagation();
       setContextMenu({
         visible: true,
         x: e.clientX,
         y: e.clientY,
-        node: null
+        node: null,
+        edge: null
       });
+    });
+
+    // Click blank to deselect
+    g.on('blank:click', () => {
+      setSelectedNode(null);
+      selectedNodeRef.current = null;
     });
 
     const dndInstance = new Dnd({
@@ -282,17 +318,20 @@ const Designer = () => {
     });
 
     // Close context menu when clicking elsewhere
-    const handleClickOutside = () => {
-      setContextMenu(prev => ({ ...prev, visible: false }));
+    const handleClickOutside = (e) => {
+      const menuElement = document.querySelector('.ant-dropdown-menu');
+      if (!menuElement || !menuElement.contains(e.target)) {
+        setContextMenu(prev => ({ ...prev, visible: false }));
+      }
     };
-    document.addEventListener('click', handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
 
     setGraph(g);
     setDnd(dndInstance);
 
     return () => {
       g.dispose();
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
@@ -350,11 +389,14 @@ const Designer = () => {
   const handleSave = async () => {
     if (!graph) return;
     const json = graph.toJSON();
-    
-    // Check validation (simplified)
+
+    console.log('保存时的节点数据:', json.cells.filter(c => c.shape !== 'edge').map(n => ({ id: n.id, type: n.data?.type, config: n.data?.config })));
+
     const nodes = json.cells.filter(c => c.shape !== 'edge');
-    if (!nodes.find(n => n.data?.type === 'START')) {
-      return message.warning('流程必须包含一个开始节点');
+    const hasStart = nodes.some(n => n.data?.type === 'START' || n.shape === 'start-node');
+    if (!hasStart) {
+      message.warning('流程必须包含一个开始节点');
+      throw new Error('NO_START_NODE');
     }
 
     try {
@@ -362,6 +404,7 @@ const Designer = () => {
       message.success('保存成功');
     } catch (err) {
       message.error('保存失败: ' + err.message);
+      throw err;
     }
   };
 
@@ -378,7 +421,21 @@ const Designer = () => {
           <Button type="text" icon={<ZoomInOutlined />} onClick={() => graph?.zoom(0.1)} />
           <Button type="text" icon={<AimOutlined />} onClick={() => graph?.centerContent()} />
           <Button type="default" icon={<SaveOutlined />} onClick={handleSave}>保存</Button>
-          <Button type="primary" style={{background: '#10b981', borderColor: '#10b981'}} icon={<BugOutlined />} onClick={() => { handleSave().then(() => setDebugVisible(true)); }}>调试</Button>
+          <Button
+            type="primary"
+            style={{ background: '#10b981', borderColor: '#10b981' }}
+            icon={<BugOutlined />}
+            onClick={async () => {
+              try {
+                await handleSave();
+                setDebugVisible(true);
+              } catch {
+                /* 已提示 */
+              }
+            }}
+          >
+            调试
+          </Button>
         </Space>
       </div>
 
@@ -412,31 +469,45 @@ const Designer = () => {
 
         {/* Canvas */}
         <div className="designer-canvas-container" ref={containerRef} />
-      </div>
 
-      {/* Node Config Modal */}
-      <Drawer
-        title={`节点配置 - ${selectedNode?.getData()?.type || '未知'}`}
-        placement="right"
-        size={500}
-        onClose={() => setFormVisible(true)}
-        open={formVisible}
-        destroyOnHidden
-      >
-        {selectedNode ? (
-          <NodeForm 
-            nodeData={selectedNode.getData()} 
-            onSave={(data) => {
-              selectedNode.setData(data);
-              selectedNode.attr('label/text', data.config.name);
-            }} 
-          />
-        ) : (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
-            <p>请选择一个节点进行配置</p>
+        {/* Node Config Panel */}
+        <div className="designer-config-panel">
+          <div className="config-panel-header">
+            <h3>节点配置 - {selectedNode?.getData()?.type || '未知'}</h3>
           </div>
-        )}
-      </Drawer>
+          <div className="config-panel-content">
+            {selectedNode ? (
+              <NodeForm 
+                nodeData={selectedNode?.getData() || {}} 
+                onSave={(data) => {
+                  const currentNode = selectedNodeRef.current;
+                  if (currentNode) {
+                    // 确保数据结构正确
+                    const currentData = currentNode.getData() || {};
+                    const updatedData = {
+                      ...currentData,
+                      type: currentData.type || data.type,
+                      config: {
+                        ...(currentData.config || {}),
+                        ...data.config
+                      }
+                    };
+                    currentNode.setData(updatedData);
+                    // 更新节点显示名称
+                    if (data.config && data.config.name) {
+                      currentNode.attr('label/text', data.config.name);
+                    }
+                  }
+                }} 
+              />
+            ) : (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+                <p>请选择一个节点进行配置</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {debugVisible && (
         <DebugConsole 
@@ -456,20 +527,35 @@ const Designer = () => {
             zIndex: 10000
           }}
           onClick={(e) => {
+            e.stopPropagation();
             setContextMenu({ ...contextMenu, visible: false });
             if (e.key === 'edit' && contextMenu.node) {
               setSelectedNode(contextMenu.node);
-            } else if (e.key === 'delete' && contextMenu.node) {
-              graph?.removeCells([contextMenu.node]);
+              selectedNodeRef.current = contextMenu.node;
+            } else if (e.key === 'delete') {
+              if (contextMenu.node) {
+                graph?.removeCells([contextMenu.node]);
+                setSelectedNode(null);
+                selectedNodeRef.current = null;
+              } else if (contextMenu.edge) {
+                graph?.removeCells([contextMenu.edge]);
+              }
             } else if (e.key === 'center') {
               graph?.centerContent();
             }
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
           }}
         >
           {contextMenu.node ? (
             [
               <Menu.Item key="edit">编辑节点</Menu.Item>,
               <Menu.Item key="delete">删除节点</Menu.Item>
+            ]
+          ) : contextMenu.edge ? (
+            [
+              <Menu.Item key="delete">删除连线</Menu.Item>
             ]
           ) : (
             [

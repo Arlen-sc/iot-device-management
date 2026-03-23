@@ -61,6 +61,8 @@ const TaskForm = ({ visible, initialValues, onCancel, onSuccess }) => {
             <Select>
               <Option value="DEVICE_CONTROL">设备控制</Option>
               <Option value="DATA_PROCESS">数据处理</Option>
+              <Option value="TCP_CLIENT">TCP 客户端（主动连接对端）</Option>
+              <Option value="TCP_SERVER">TCP 服务端（本机监听）</Option>
               <Option value="MIXED">混合流程</Option>
             </Select>
           </Form.Item>
