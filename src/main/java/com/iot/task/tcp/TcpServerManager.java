@@ -108,11 +108,11 @@ public class TcpServerManager {
     /**
      * 等待指定任务的数据。
      * 重要：严格按 eventId 隔离，确保不会串台。
-     * 
+     *
      * @param port 服务器端口
      * @param eventId 流程/任务 ID，必须与数据生产者一致
-     * @param timeoutMs 超时时间（毫秒）
-     * @return 接收到的数据，超时返回 null
+     * @param timeoutMs 超时时间（毫秒）；<= 0 表示无限等待
+     * @return 接收到的数据；若设置了超时且超时则返回 null
      */
     public String waitForData(int port, String eventId, int timeoutMs) throws IOException {
         ManagedServer server = servers.get(port);
@@ -127,7 +127,12 @@ public class TcpServerManager {
         BlockingQueue<String> taskQueue = getTaskQueue(server, eventId);
 
         try {
-            String msg = taskQueue.poll(timeoutMs, TimeUnit.MILLISECONDS);
+            String msg;
+            if (timeoutMs <= 0) {
+                msg = taskQueue.take();
+            } else {
+                msg = taskQueue.poll(timeoutMs, TimeUnit.MILLISECONDS);
+            }
             if (msg != null) {
                 log.info("Received data for task {} on port {}: {}", 
                         eventId, port, abbreviate(msg, 100));

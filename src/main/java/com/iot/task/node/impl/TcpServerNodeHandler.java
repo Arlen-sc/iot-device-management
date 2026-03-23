@@ -9,6 +9,7 @@ import com.iot.util.VariablePathUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -97,6 +98,7 @@ public class TcpServerNodeHandler implements NodeHandler {
 
     private NodeResult handleBroadcast(FlowNode node, FlowExecutionContext context,
                                         Map<String, Object> config, int port, String eventId) throws Exception {
+        ensureServerRunning(node, context, port, eventId, "BROADCAST");
         String sendDataRaw = (String) config.get("sendData");
         boolean sendHex = toBool(config.get("sendHex"), false);
         String sendData = sendDataRaw != null ? resolveVariables(sendDataRaw, context) : "";
@@ -117,27 +119,60 @@ public class TcpServerNodeHandler implements NodeHandler {
     private NodeResult handleReceive(FlowNode node, FlowExecutionContext context,
                                       Map<String, Object> config, int port, String outputVar, 
                                       String eventId) throws Exception {
-        int timeout = toInt(config.get("timeout"), 10000);
+        ensureServerRunning(node, context, port, eventId, "RECEIVE");
+        // TCP 服务端 RECEIVE 语义：默认阻塞等待，不使用超时终止。
+        int timeout = 0;
 
-        context.addLog("TCP server waiting for data on port " + port + 
-                " (timeout: " + timeout + "ms" + 
+        Map<String, Object> receiveParams = new LinkedHashMap<>();
+        receiveParams.put("operation", "RECEIVE");
+        receiveParams.put("port", port);
+        receiveParams.put("waitMode", "BLOCKING");
+        receiveParams.put("timeoutMs", "INFINITE");
+        receiveParams.put("eventId", eventId);
+        receiveParams.put("outputVariable", outputVar);
+        context.addLog("INFO", "TCP_SERVER 接收参数", "TCP_SERVER", node.getName(), receiveParams, null);
+
+        context.addLog("TCP server waiting for data on port " + port +
+                " (blocking wait" +
                 (eventId != null ? ", eventId: " + eventId : "") + ")");
-        log.info("TCP_SERVER node '{}': waiting for data on port {} (timeout: {}ms, eventId: {})", 
-                node.getName(), port, timeout, eventId);
+        log.info("TCP_SERVER node '{}': waiting for data on port {} (blocking, eventId: {})",
+                node.getName(), port, eventId);
 
         String received = tcpServerManager.waitForData(port, eventId, timeout);
 
         if (received == null) {
-            context.addLog("TCP server receive timeout on port " + port +
-                    (eventId != null ? " (eventId: " + eventId + ")" : ""));
-            return NodeResult.error("TCP_SERVER receive timeout on port " + port);
+            return NodeResult.error("TCP_SERVER unexpected null receive on port " + port);
         }
 
         context.setVariable(outputVar, received);
+        Map<String, Object> outputKv = new LinkedHashMap<>();
+        outputKv.put("variable", outputVar);
+        outputKv.put("value", received);
+        outputKv.put("length", received.length());
+        outputKv.put("preview", abbreviate(received, 120));
+        context.setVariable(outputVar + "_kv", outputKv);
+
+        context.addLog("INFO", "TCP_SERVER 输出变量", "TCP_SERVER", node.getName(), outputKv, null);
         context.addLog("TCP server received: " + abbreviate(received, 120));
         log.info("TCP_SERVER node '{}': received {} chars on port {} (eventId: {})", 
                 node.getName(), received.length(), port, eventId);
         return NodeResult.ok(received);
+    }
+
+    /**
+     * 兼容画布未显式放 START 的场景：RECEIVE/BROADCAST 时按需拉起监听，避免直接失败。
+     */
+    private void ensureServerRunning(FlowNode node, FlowExecutionContext context, int port, String eventId, String operation)
+            throws Exception {
+        if (tcpServerManager.isRunning(port)) {
+            return;
+        }
+        boolean created = tcpServerManager.startServer(port);
+        context.addLog("TCP_SERVER[" + operation + "] auto-start " +
+                (created ? "started" : "reused") + " server on port " + port +
+                (eventId != null ? " (eventId: " + eventId + ")" : ""));
+        log.info("TCP_SERVER node '{}': auto-start {} before {} on port {} (eventId: {})",
+                node.getName(), created ? "started" : "reused", operation, port, eventId);
     }
 
     private NodeResult handleStop(FlowNode node, FlowExecutionContext context,

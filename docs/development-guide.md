@@ -310,6 +310,7 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 #### SCRIPT（脚本处理）⭐ 统一数据处理节点
 
 这是最核心的数据处理节点，支持23种操作，通过操作链串联实现复杂数据变换。
+适用于多步骤加工、模板组装、JSON处理等复杂逻辑。
 
 | 配置项 | 说明 |
 |---|---|
@@ -347,6 +348,12 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 | SUBSTRING | 截取子串 | start, end |
 | REPLACE | 字符串替换 | search, replacement |
 
+**设计器说明（2026-03）**
+
+- `SCRIPT` 节点“操作类型”下拉统一改为固定完整选项（覆盖全部已支持操作），避免出现空白选项。
+- 如果流程里已存在旧操作值，编辑器会保留并可继续修改。
+- `SCRIPT` 节点加载时会过滤空操作项并做空值保护，避免旧脏数据导致配置面板白屏。
+
 **示例 — hex数据采集与转换：**
 ```json
 {
@@ -362,6 +369,21 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 #### DATA_TRANSFORM（数据转换）⚠️ 建议使用SCRIPT替代
 
 功能已整合入SCRIPT节点。保留此节点用于向后兼容，内部已委托给SCRIPT引擎执行。
+
+#### BASE_CONVERT（进制转换）
+
+用于单一职责的进制转换，和 `SCRIPT` 节点区分：  
+`SCRIPT` 负责复杂处理链，`BASE_CONVERT` 只做输入/输出进制变换。
+
+| 配置项 | 说明 |
+|---|---|
+| mode | 转换模式：HEX_TO_DEC / DEC_TO_HEX / BIN_TO_DEC / DEC_TO_BIN / HEX_TO_BIN / BIN_TO_HEX / CUSTOM |
+| source | 源变量路径 |
+| target | 目标变量路径 |
+| fromBase | 自定义源进制（CUSTOM 时） |
+| toBase | 自定义目标进制（CUSTOM 时） |
+| uppercase | 输出字母是否大写 |
+| withPrefix | 输出是否附加 0x/0b 前缀 |
 
 #### DATA_EXTRACT（数据抽取）
 从一个变量路径复制到另一个路径，等价于 `VARIABLE(copy)` 操作。
@@ -445,6 +467,21 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 > - 读取远程数据库 → SQL_QUERY
 > - 简单写入用SQL模式，复杂映射用字段映射模式
 
+#### DB_OPERATION（设计器数据库操作节点）
+
+用于流程设计器中的通用数据库读写节点，支持本地库和外部数据源选择。
+
+| 配置项 | 默认值 | 说明 |
+|---|---|---|
+| operation | SELECT | SELECT / INSERT / UPDATE / DELETE |
+| dbMode | LOCAL | LOCAL（本地库）/ REMOTE（外部数据源） |
+| dataSourceId | - | REMOTE 模式必填，选择数据源管理中的数据源 |
+| sql | - | 自定义 SQL（支持 `${var}` 占位符），优先级最高 |
+| tableName | - | 当 `sql` 为空时可见；用于 SELECT/DELETE 简化语句 |
+| outputVariable | dbResult | 执行结果输出变量 |
+
+说明：节点执行会输出结构化过程日志（执行参数、查询行数/影响行数），便于在调试台排查问题。
+
 ---
 
 ### 5.5 通信集成
@@ -460,10 +497,11 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 | sendData | "" | 发送内容（支持${var}，可空） |
 | sendHex | false | 是否按 hex 字节发送 |
 | waitResponse | false | 是否等待对端响应（未配置时默认 false） |
-| timeout | 5000 | 超时毫秒数 |
 | readMode | LINE | LINE/LENGTH/DELIMITER/RAW |
 | readLength | 1024 | LENGTH/RAW 模式读取字节数 |
 | outputVariable | tcpClientData | 响应存入变量 |
+
+说明：当 `waitResponse=true` 时，`TCP_CLIENT` 在连接成功后采用阻塞等待模式（发送后持续等待服务端返回，不使用读取超时）。
 
 #### TCP_LISTEN（TCP监听）⚠️ 建议使用TCP_CLIENT替代
 
@@ -479,9 +517,16 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 | operation | START（启动/复用监听）/ BROADCAST / RECEIVE / STOP |
 | sendData | BROADCAST 时下发内容（支持 hex 开关） |
 | sendHex | BROADCAST 时是否按 hex 解析 |
-| timeout | RECEIVE 等待超时 |
 | outputVariable | RECEIVE 写入变量 |
 | cleanupOnStop | STOP 时是否清理本任务 eventId 队列 |
+
+说明：当 `operation=RECEIVE` 或 `BROADCAST` 且该端口尚未监听时，系统会自动拉起 TCP 服务端（无需必须先放一个 `START` 节点）。
+说明：`RECEIVE` 采用阻塞等待模式（无限等待数据），不引入超时语义，适用于常驻 TCP 服务端场景。
+说明：`RECEIVE` 执行时会额外输出结构化 key-value 过程日志：  
+- 接收参数（`operation/port/waitMode/timeoutMs/eventId/outputVariable`）  
+- 输出变量（`variable/value/length/preview`）  
+并同步写入上下文变量 `${outputVariable}_kv`，便于后续节点直接按 key-value 取值。
+说明：调试台“变量状态”对对象值（含 `${outputVariable}_kv`）采用 key-value 分行渲染；字符串化 JSON/Map 也会自动识别并格式化显示，避免单行挤压。
 
 #### HTTP_REQUEST（HTTP请求）
 
@@ -595,7 +640,7 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 | POST | /api/task-flow-configs/{id}/stop | 停止循环执行 |
 | GET | /api/task-flow-configs/running | 查看运行中的流程 |
 
-> 前端任务列表页在页面加载或点击“刷新”时请求 `running` 与 `task-flow-configs`，不再定时轮询，也不会在启动/停止/调试后自动刷新列表。
+> 前端任务列表页在页面加载或点击“刷新”时请求 `running` 与 `task-flow-configs`；编辑任务并保存后会自动刷新列表，不再定时轮询，也不会在启动/停止/调试后自动刷新列表。
 
 ### 7.2 流程日志
 
@@ -649,8 +694,8 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 - **配置节点：** 点击节点，右侧面板显示配置表单
 - **删除：** 选中节点/边后按Delete键，或在画布中右键节点/连线选择“删除”
 - **保存：** 点击工具栏保存按钮
-- **调试日志：** 调试控制台使用内存实时日志会话（打开后创建会话并增量拉取），不从数据库读取；默认按节点摘要展示（每个节点一条，优先成功/失败/异常），"清空"仅清空当前界面显示，不影响数据库日志
-- **登录保持：** 系统启用 remember-me（30天），后端重启后在 cookie 未过期且未主动退出的情况下可自动恢复登录
+- **调试日志：** 调试控制台使用内存实时日志会话（打开后创建会话并增量拉取），不从数据库读取；默认按节点摘要展示（每个节点一条，优先成功/失败/异常），并合并显示关键发送/接收信息；节点聚合优先按 `nodeId`，并兼容 `TCP_SEND/TCP_CLIENT` 别名去重，避免同一 TCP 发送节点出现多条摘要；日志主信息采用单行简约展示（执行时间、名称、类型、是否成功），其中“名称”为节点名称，“类型”为节点类型中文名（如设备数据、设备控制、TCP 客户端）；过程/输出/异常作为次级信息，且过程支持多行展示（每条过程单独一行），会自动去除“节点执行成功/失败/异常/警告”等状态词，避免与“状态”重复；TCP 类节点会额外显示发送变量与接收变量内容；`SYSTEM` 类型日志使用独立系统样式展示（不显示节点成功/失败状态），系统分隔日志（流程执行开始/结束分隔线）不再单独展示，避免与底部最终状态重复；异常信息默认折叠单行，支持“展开/收起”查看完整内容；支持“完整报文”开关切换截断/完整显示（并记住上次选择）；日志按时间正序展示（最新在最下方），并在运行期间自动滚动到最新；右侧变量状态在运行中也实时同步；"清空"仅清空当前界面显示，不影响数据库日志
+- **登录保持：** 系统启用 remember-me（30天），后端重启后在 cookie 未过期且未主动退出的情况下可自动恢复登录。`SecurityConfig` 中管理员账号改为固定盐值生成稳定 bcrypt 哈希，避免因每次重启重新 `encode` 导致 remember-me 签名校验失效。
 
 ### 8.3 变量引用规则
 

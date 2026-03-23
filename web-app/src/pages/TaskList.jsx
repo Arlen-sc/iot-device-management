@@ -241,9 +241,10 @@ const TaskList = () => {
         visible={formVisible} 
         initialValues={editingTask} 
         onCancel={() => setFormVisible(false)}
-        onSuccess={() => {
+        onSuccess={async () => {
           setFormVisible(false);
-          message.success('保存成功，请点击刷新获取最新列表');
+          await loadData();
+          message.success('保存成功，列表已刷新');
         }}
       />
       

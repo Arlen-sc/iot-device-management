@@ -24,7 +24,6 @@ import java.util.Map;
  *   sendData         - data to send (supports ${variable} placeholders)
  *   sendHex          - if true, sendData is treated as hex string and converted to bytes
  *   waitResponse     - whether to wait for a response (default false，与设计器一致)
- *   timeout          - socket timeout in ms (default 5000)
  *   charset          - character encoding (default UTF-8)
  *   readMode         - LINE | LENGTH | DELIMITER (default LINE)
  *   readLength       - bytes to read when readMode=LENGTH
@@ -34,6 +33,7 @@ import java.util.Map;
 @Slf4j
 @Component
 public class TcpClientNodeHandler implements NodeHandler {
+    private static final int CONNECT_TIMEOUT_MS = 5000;
 
     @Override
     public String getType() {
@@ -50,7 +50,6 @@ public class TcpClientNodeHandler implements NodeHandler {
 
             String host = (String) config.get("host");
             int port = toInt(config.get("port"), 0);
-            int timeout = toInt(config.get("timeout"), 5000);
             String charsetName = (String) config.getOrDefault("charset", "UTF-8");
             String readMode = (String) config.getOrDefault("readMode", "LINE");
             boolean waitResponse = toBool(config.get("waitResponse"), false);
@@ -73,27 +72,35 @@ public class TcpClientNodeHandler implements NodeHandler {
 
             String receivedData = null;
             try (Socket socket = new Socket()) {
-                socket.connect(new InetSocketAddress(host, port), timeout);
-                socket.setSoTimeout(timeout);
+                socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
+                // 场景要求：连接成功后收发阶段采用阻塞等待，不使用读取超时。
+                socket.setSoTimeout(0);
 
                 // Send data if provided
                 if (sendData != null && !sendData.isEmpty()) {
                     byte[] dataToSend;
+                    String sentPreview;
                     if (sendHex) {
                         dataToSend = hexStringToBytes(sendData);
+                        sentPreview = abbreviate(sendData.replaceAll("\\s+", ""), 120);
                     } else {
                         dataToSend = (sendData + "\n").getBytes(charset);
+                        sentPreview = abbreviate(sendData, 120);
                     }
                     socket.getOutputStream().write(dataToSend);
                     socket.getOutputStream().flush();
-                    context.addLog("TCP_CLIENT sent " + dataToSend.length + " bytes");
+                    context.addLog("INFO", "TCP_CLIENT sent " + dataToSend.length + " bytes",
+                            "TCP_CLIENT", node.getName(), sentPreview, null);
                     log.info("TCP_CLIENT sent {} bytes to {}:{}", dataToSend.length, host, port);
                 }
 
                 // Wait for response
                 if (waitResponse) {
+                    context.addLog("INFO", "TCP_CLIENT waiting response (blocking)",
+                            "TCP_CLIENT", node.getName(), null, null);
                     receivedData = readResponse(socket, readMode, config, charset);
-                    context.addLog("TCP_CLIENT received: " + abbreviate(receivedData, 120));
+                    context.addLog("INFO", "TCP_CLIENT received: " + abbreviate(receivedData, 120),
+                            "TCP_CLIENT", node.getName(), abbreviate(receivedData, 120), null);
                     log.info("TCP_CLIENT received {} chars from {}:{}",
                             receivedData != null ? receivedData.length() : 0, host, port);
                 }

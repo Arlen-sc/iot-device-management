@@ -6,6 +6,33 @@ import api from '../utils/api';
 const { TextArea } = Input;
 const { Option } = Select;
 
+const SCRIPT_OPERATION_OPTIONS = [
+  { value: 'HEX_STRING_TO_DEC_ARRAY', label: 'HEX_STRING_TO_DEC_ARRAY（Hex串->十进制数组）' },
+  { value: 'SPLIT', label: 'SPLIT（字符串拆分）' },
+  { value: 'JOIN', label: 'JOIN（数组拼接）' },
+  { value: 'HEX_ARRAY_TO_DEC', label: 'HEX_ARRAY_TO_DEC（Hex数组->十进制）' },
+  { value: 'DEC_ARRAY_TO_HEX', label: 'DEC_ARRAY_TO_HEX（十进制数组->Hex）' },
+  { value: 'HEX_TO_DEC', label: 'HEX_TO_DEC（单个Hex->十进制）' },
+  { value: 'DEC_TO_HEX', label: 'DEC_TO_HEX（单个十进制->Hex）' },
+  { value: 'ARRAY_LENGTH', label: 'ARRAY_LENGTH（长度）' },
+  { value: 'ARRAY_SLICE', label: 'ARRAY_SLICE（切片）' },
+  { value: 'STRING_TO_HEX', label: 'STRING_TO_HEX（字符串->Hex）' },
+  { value: 'HEX_TO_STRING', label: 'HEX_TO_STRING（Hex->字符串）' },
+  { value: 'STRIP_PREFIX', label: 'STRIP_PREFIX（去前缀）' },
+  { value: 'CONCAT', label: 'CONCAT（拼接）' },
+  { value: 'TEMPLATE', label: 'TEMPLATE（模板替换）' },
+  { value: 'FORMAT_VALUES', label: 'FORMAT_VALUES（格式化键值串）' },
+  { value: 'PARSE_CSV_VALUES', label: 'PARSE_CSV_VALUES（k=v解析）' },
+  { value: 'JSON_BUILD', label: 'JSON_BUILD（构建JSON）' },
+  { value: 'JSON_PARSE', label: 'JSON_PARSE（解析JSON）' },
+  { value: 'JSON_STRINGIFY', label: 'JSON_STRINGIFY（对象转JSON字符串）' },
+  { value: 'ROUND', label: 'ROUND（四舍五入）' },
+  { value: 'TO_NUMBER', label: 'TO_NUMBER（转数字）' },
+  { value: 'TO_STRING', label: 'TO_STRING（转字符串）' },
+  { value: 'SUBSTRING', label: 'SUBSTRING（截取子串）' },
+  { value: 'REPLACE', label: 'REPLACE（字符串替换）' }
+];
+
 // A simplified generic Node Form to replace the huge vanilla JS one
 const NodeForm = ({ nodeData, onSave }) => {
   const [form] = Form.useForm();
@@ -16,6 +43,7 @@ const NodeForm = ({ nodeData, onSave }) => {
   const [deviceOptions, setDeviceOptions] = useState([]);
   const [deviceDataList, setDeviceDataList] = useState([]);
   const [operationTypes, setOperationTypes] = useState([]);
+  const [dataSourceOptions, setDataSourceOptions] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [selectedOpDesc, setSelectedOpDesc] = useState('');
 
@@ -33,16 +61,19 @@ const NodeForm = ({ nodeData, onSave }) => {
 
   // 需要动态监控表单字段以控制条件渲染
   const dataOperation = Form.useWatch('operation', form);
+  const dbSqlValue = Form.useWatch('sql', form);
 
   useEffect(() => {
     let initialValues = { ...nodeData.config } || { name: type };
     
     // 反向解析特殊格式以适应表单
-    if (initialValues.operations) {
-      initialValues.operations = initialValues.operations.map(op => ({
-        ...op,
-        paramsStr: op.params ? JSON.stringify(op.params) : undefined
-      }));
+    if (Array.isArray(initialValues.operations)) {
+      initialValues.operations = initialValues.operations
+        .filter(op => op && typeof op === 'object')
+        .map(op => ({
+          ...op,
+          paramsStr: op.params ? JSON.stringify(op.params) : undefined
+        }));
     }
 
     if (initialValues.branches) {
@@ -111,7 +142,23 @@ const NodeForm = ({ nodeData, onSave }) => {
       }
     };
 
+    const loadDataSources = async () => {
+      try {
+        const res = await api.get('/data-sources');
+        const list = (res || []).map(item => ({
+          label: `${item.name || '未命名数据源'} (ID:${item.id})`,
+          value: String(item.id)
+        }));
+        setDataSourceOptions(list);
+      } catch (e) {
+        setDataSourceOptions([]);
+      }
+    };
+
     loadDevices();
+    if (type === 'DB_OPERATION') {
+      loadDataSources();
+    }
     if (type === 'DEVICE_CONTROL') {
       loadOperations();
     }
@@ -141,11 +188,11 @@ const NodeForm = ({ nodeData, onSave }) => {
         safeValues.operations = safeValues.operations.map(op => {
           if (!op) return op;
           const safeOp = { ...op };
-          if (safeValues.paramsStr) {
+          if (safeOp.paramsStr) {
             try {
               safeOp.params = JSON.parse(safeOp.paramsStr);
             } catch (e) {
-              message.error("Invalid JSON in paramsStr:", safeOp.paramsStr);
+              message.error(`附加参数 JSON 解析失败: ${safeOp.paramsStr}`);
             }
             delete safeOp.paramsStr;
           }
@@ -199,23 +246,22 @@ const NodeForm = ({ nodeData, onSave }) => {
     switch (type) {
       case 'SCRIPT':
         return (
-          <Form.Item name="operations" label="脚本处理操作 (Operations)">
+          <>
+            <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 500 }}>
+              脚本处理操作 (Operations)
+            </div>
             <Form.List name="operations">
               {(fields, { add, remove }) => (
                 <>
                   {fields.map(({ key, name, ...restField }) => (
                     <div key={key} style={{ border: '1px dashed #d9d9d9', padding: 12, marginBottom: 12, borderRadius: 4 }}>
                       <Form.Item {...restField} name={[name, 'op']} label="操作类型" initialValue="HEX_STRING_TO_DEC_ARRAY">
-                        <Select>
-                          <Option value="HEX_STRING_TO_DEC_ARRAY">HEX_STRING_TO_DEC_ARRAY</Option>
-                          <Option value="ARRAY_LENGTH">ARRAY_LENGTH</Option>
-                          <Option value="ARRAY_SLICE">ARRAY_SLICE</Option>
-                          <Option value="JSON_BUILD">JSON_BUILD</Option>
-                          <Option value="STRING_TO_HEX">STRING_TO_HEX</Option>
-                          <Option value="FORMAT_VALUES">FORMAT_VALUES</Option>
-                          <Option value="STRIP_PREFIX">STRIP_PREFIX</Option>
-                          <Option value="HEX_TO_STRING">HEX_TO_STRING</Option>
-                          <Option value="JSON_PARSE">JSON_PARSE</Option>
+                        <Select
+                          showSearch
+                          optionFilterProp="label"
+                          options={SCRIPT_OPERATION_OPTIONS}
+                          placeholder="请选择操作类型"
+                        >
                         </Select>
                       </Form.Item>
                       <Form.Item {...restField} name={[name, 'source']} label="源变量">
@@ -238,7 +284,72 @@ const NodeForm = ({ nodeData, onSave }) => {
                 </>
               )}
             </Form.List>
-          </Form.Item>
+          </>
+        );
+
+      case 'BASE_CONVERT':
+        return (
+          <>
+            <div style={{ marginBottom: 8, fontSize: 14, fontWeight: 500 }}>
+              进制转换配置
+            </div>
+            <Form.Item
+              name="mode"
+              label="转换模式"
+              initialValue="HEX_TO_DEC"
+              rules={[{ required: true, message: '请选择转换模式' }]}
+            >
+              <Select>
+                <Option value="HEX_TO_DEC">16进制 → 10进制</Option>
+                <Option value="DEC_TO_HEX">10进制 → 16进制</Option>
+                <Option value="BIN_TO_DEC">2进制 → 10进制</Option>
+                <Option value="DEC_TO_BIN">10进制 → 2进制</Option>
+                <Option value="HEX_TO_BIN">16进制 → 2进制</Option>
+                <Option value="BIN_TO_HEX">2进制 → 16进制</Option>
+                <Option value="CUSTOM">自定义进制 (from/to)</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item name="source" label="源变量" rules={[{ required: true, message: '请输入源变量' }]}>
+              <Input placeholder="如: payload.hexValue" />
+            </Form.Item>
+            <Form.Item name="target" label="目标变量" rules={[{ required: true, message: '请输入目标变量' }]}>
+              <Input placeholder="如: payload.decValue" />
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.mode !== cur.mode}>
+              {() => {
+                const mode = form.getFieldValue('mode') || 'HEX_TO_DEC';
+                if (mode !== 'CUSTOM') {
+                  return null;
+                }
+                return (
+                  <>
+                    <Form.Item
+                      name="fromBase"
+                      label="源进制"
+                      initialValue={16}
+                      rules={[{ required: true, message: '请输入源进制' }]}
+                    >
+                      <InputNumber min={2} max={36} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="toBase"
+                      label="目标进制"
+                      initialValue={10}
+                      rules={[{ required: true, message: '请输入目标进制' }]}
+                    >
+                      <InputNumber min={2} max={36} style={{ width: '100%' }} />
+                    </Form.Item>
+                  </>
+                );
+              }}
+            </Form.Item>
+            <Form.Item name="uppercase" label="输出字母大写" valuePropName="checked" initialValue={true}>
+              <Switch />
+            </Form.Item>
+            <Form.Item name="withPrefix" label="附加进制前缀(0x/0b)" valuePropName="checked" initialValue={false}>
+              <Switch />
+            </Form.Item>
+          </>
         );
 
       case 'TCP_SEND':
@@ -269,8 +380,18 @@ const NodeForm = ({ nodeData, onSave }) => {
             <Form.Item name="outputVariable" label="输出变量名">
               <Input placeholder="接收数据写入的变量名" />
             </Form.Item>
-            <Form.Item name="timeout" label="超时时间 (ms)" initialValue={5000}>
-              <InputNumber min={100} style={{ width: '100%' }} />
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.waitResponse !== cur.waitResponse}>
+              {() => {
+                const waitResponse = !!form.getFieldValue('waitResponse');
+                if (!waitResponse) {
+                  return null;
+                }
+                return (
+                  <div style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>
+                    当前为阻塞等待模式：发送后会持续等待服务端返回，不使用超时。
+                  </div>
+                );
+              }}
             </Form.Item>
           </>
         );
@@ -310,9 +431,9 @@ const NodeForm = ({ nodeData, onSave }) => {
                       <Form.Item name="outputVariable" label="输出变量名" initialValue="tcpServerData" rules={[{ required: true }]}>
                         <Input placeholder="接收数据写入变量" />
                       </Form.Item>
-                      <Form.Item name="timeout" label="接收超时 (ms)" initialValue={10000}>
-                        <InputNumber min={100} style={{ width: '100%' }} />
-                      </Form.Item>
+                      <div style={{ color: '#888', fontSize: 12, marginBottom: 8 }}>
+                        服务端接收为阻塞等待模式：会持续等待客户端数据，不使用超时。
+                      </div>
                     </>
                   );
                 }
@@ -461,12 +582,37 @@ const NodeForm = ({ nodeData, onSave }) => {
                 <Option value="DELETE">删除 (DELETE)</Option>
               </Select>
             </Form.Item>
-            <Form.Item name="tableName" label="表名" rules={[{ required: false }]} help="使用自定义 SQL 时可不填">
-              <Input placeholder="输入数据库表名" />
+            <Form.Item name="dbMode" label="数据源模式" initialValue="LOCAL">
+              <Select>
+                <Option value="LOCAL">本地库 (LOCAL)</Option>
+                <Option value="REMOTE">外部数据源 (REMOTE)</Option>
+              </Select>
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(prev, cur) => prev.dbMode !== cur.dbMode}>
+              {() => {
+                const mode = form.getFieldValue('dbMode') || 'LOCAL';
+                if (mode !== 'REMOTE') return null;
+                return (
+                  <Form.Item name="dataSourceId" label="选择数据源" rules={[{ required: true, message: '请选择数据源' }]}>
+                    <Select
+                      showSearch
+                      allowClear
+                      placeholder="请选择已配置的数据源"
+                      options={dataSourceOptions}
+                      optionFilterProp="label"
+                    />
+                  </Form.Item>
+                );
+              }}
             </Form.Item>
             <Form.Item name="sql" label="自定义 SQL (可选)">
               <TextArea rows={3} placeholder="如输入此项，将优先执行自定义 SQL。支持 ${var} 占位符" />
             </Form.Item>
+            {!String(dbSqlValue || '').trim() && (
+              <Form.Item name="tableName" label="表名" rules={[{ required: false }]}>
+                <Input placeholder="输入数据库表名" />
+              </Form.Item>
+            )}
             <Form.Item name="outputVariable" label="输出变量名 (仅查询)">
               <Input placeholder="查询结果存入此变量" />
             </Form.Item>

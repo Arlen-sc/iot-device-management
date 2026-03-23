@@ -173,6 +173,7 @@ const nodeTypeMap = {
   CONDITION: { label: '条件分支', color: '#faad14' },
   DELAY: { label: '延迟节点', color: '#13c2c2' },
   SCRIPT: { label: '脚本处理', color: '#722ed1' },
+  BASE_CONVERT: { label: '进制转换', color: '#531dab' },
   HTTP_REQUEST: { label: 'HTTP 请求', color: '#1890ff' },
   PLC_READ: { label: 'PLC 读取', color: '#eb2f96' },
   PLC_WRITE: { label: 'PLC 写入', color: '#eb2f96' },
@@ -467,6 +468,7 @@ const Designer = () => {
           
           <div className="stencil-group">数据处理</div>
           <div className="stencil-items-grid">
+            <div className="stencil-item script" style={{ borderColor: '#531dab' }} onMouseDown={e => handleDragStart(e, 'BASE_CONVERT')}>进制转换</div>
             <div className="stencil-item db" onMouseDown={e => handleDragStart(e, 'DB_OPERATION')}>数据库操作</div>
             <div className="stencil-item dedup" onMouseDown={e => handleDragStart(e, 'DEDUP_FILTER')}>去重过滤</div>
             <div className="stencil-item log" onMouseDown={e => handleDragStart(e, 'LOG')}>日志记录</div>

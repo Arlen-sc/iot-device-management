@@ -88,9 +88,8 @@ public class FlowEngine {
         resp.put("nextOffset", size);
         resp.put("startedAt", session.startedAt.toString());
         resp.put("finishedAt", session.finishedAt != null ? session.finishedAt.toString() : null);
-        if (!"RUNNING".equals(session.status)) {
-            resp.put("variables", session.context.getVariables());
-        }
+        // 调试界面需要在运行中也实时展示变量状态
+        resp.put("variables", session.context.getVariables());
         return resp;
     }
 

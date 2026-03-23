@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.crypto.bcrypt.BCrypt;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -18,6 +19,10 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+    /**
+     * 固定盐值生成稳定哈希，避免每次重启密码哈希变化导致remember-me签名失效。
+     */
+    private static final String ADMIN_PASSWORD_HASH = BCrypt.hashpw("admin123", "$2a$10$7EqJtq98hPqEX7fNZaFWoO");
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -55,7 +60,7 @@ public class SecurityConfig {
     @Bean
     public UserDetailsService userDetailsService() {
         UserDetails admin = User.withUsername("admin")
-            .password(passwordEncoder().encode("admin123"))
+            .password(ADMIN_PASSWORD_HASH)
             .roles("ADMIN")
             .build();
 
