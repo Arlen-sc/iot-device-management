@@ -20,110 +20,152 @@ import DebugConsole from './DebugConsole';
 import './Designer.css';
 
 // 注册自定义节点样式
-Graph.registerNode('flow-node', {
-  inherit: 'rect',
-  width: 140,
-  height: 40,
-  attrs: {
-    body: {
-      stroke: '#1890ff',
-      strokeWidth: 2,
-      fill: '#e6f7ff',
-      rx: 6,
-      ry: 6,
-    },
-    label: {
-      fill: '#333',
-      fontSize: 13,
-    },
-  },
-  ports: {
-    groups: {
-      in: { 
-        position: 'top', 
-        attrs: { 
-          circle: { 
-            r: 4, 
-            magnet: true, 
-            stroke: '#1890ff', 
-            fill: '#fff',
-            style: { visibility: 'visible' }
-          } 
-        } 
+try {
+  Graph.registerNode('flow-node', {
+    inherit: 'rect',
+    width: 140,
+    height: 40,
+    attrs: {
+      body: {
+        stroke: '#1890ff',
+        strokeWidth: 2,
+        fill: '#e6f7ff',
+        rx: 6,
+        ry: 6,
       },
-      out: { 
-        position: 'bottom', 
-        attrs: { 
-          circle: { 
-            r: 4, 
-            magnet: true, 
-            stroke: '#1890ff', 
-            fill: '#fff',
-            style: { visibility: 'visible' }
-          } 
-        } 
+      label: {
+        fill: '#333',
+        fontSize: 13,
       },
     },
-  },
-});
+    ports: {
+      items: [
+        { id: 'port_top', group: 'top' },
+        { id: 'port_bottom', group: 'bottom' },
+        { id: 'port_left', group: 'left' },
+        { id: 'port_right', group: 'right' }
+      ],
+      groups: {
+        top: { 
+          position: 'top', 
+          attrs: { 
+            circle: { 
+              r: 4, 
+              magnet: true, 
+              stroke: '#1890ff', 
+              fill: '#fff',
+              style: { visibility: 'visible' }
+            } 
+          } 
+        },
+        bottom: { 
+          position: 'bottom', 
+          attrs: { 
+            circle: { 
+              r: 4, 
+              magnet: true, 
+              stroke: '#1890ff', 
+              fill: '#fff',
+              style: { visibility: 'visible' }
+            } 
+          } 
+        },
+        left: { 
+          position: 'left', 
+          attrs: { 
+            circle: { 
+              r: 4, 
+              magnet: true, 
+              stroke: '#1890ff', 
+              fill: '#fff',
+              style: { visibility: 'visible' }
+            } 
+          } 
+        },
+        right: { 
+          position: 'right', 
+          attrs: { 
+            circle: { 
+              r: 4, 
+              magnet: true, 
+              stroke: '#1890ff', 
+              fill: '#fff',
+              style: { visibility: 'visible' }
+            } 
+          } 
+        },
+      },
+    },
+  });
+} catch (e) {
+  // 节点已注册，忽略错误
+}
 
-Graph.registerNode('start-node', {
-  inherit: 'circle',
-  width: 50,
-  height: 50,
-  attrs: {
-    body: { fill: '#f6ffed', stroke: '#52c41a', strokeWidth: 2 },
-    label: { text: '开始', fill: '#52c41a', fontSize: 14 },
-  },
-  ports: {
-    items: [
-      { id: 'port_out', group: 'out' }
-    ],
-    groups: { 
-      out: { 
-        position: 'bottom', 
-        attrs: { 
-          circle: { 
-            r: 4, 
-            magnet: true, 
-            stroke: '#52c41a', 
-            fill: '#fff',
-            style: { visibility: 'visible' }
+try {
+  Graph.registerNode('start-node', {
+    inherit: 'circle',
+    width: 50,
+    height: 50,
+    attrs: {
+      body: { fill: '#f6ffed', stroke: '#52c41a', strokeWidth: 2 },
+      label: { text: '开始', fill: '#52c41a', fontSize: 14 },
+    },
+    ports: {
+      items: [
+        { id: 'port_out', group: 'out' }
+      ],
+      groups: { 
+        out: { 
+          position: 'bottom', 
+          attrs: { 
+            circle: { 
+              r: 4, 
+              magnet: true, 
+              stroke: '#52c41a', 
+              fill: '#fff',
+              style: { visibility: 'visible' }
+            } 
           } 
         } 
       } 
-    } 
-  },
-});
+    },
+  });
+} catch (e) {
+  // 节点已注册，忽略错误
+}
 
-Graph.registerNode('end-node', {
-  inherit: 'circle',
-  width: 50,
-  height: 50,
-  attrs: {
-    body: { fill: '#fff1f0', stroke: '#ff4d4f', strokeWidth: 2 },
-    label: { text: '结束', fill: '#ff4d4f', fontSize: 14 },
-  },
-  ports: {
-    items: [
-      { id: 'port_in', group: 'in' }
-    ],
-    groups: { 
-      in: { 
-        position: 'top', 
-        attrs: { 
-          circle: { 
-            r: 4, 
-            magnet: true, 
-            stroke: '#ff4d4f', 
-            fill: '#fff',
-            style: { visibility: 'visible' }
+try {
+  Graph.registerNode('end-node', {
+    inherit: 'circle',
+    width: 50,
+    height: 50,
+    attrs: {
+      body: { fill: '#fff1f0', stroke: '#ff4d4f', strokeWidth: 2 },
+      label: { text: '结束', fill: '#ff4d4f', fontSize: 14 },
+    },
+    ports: {
+      items: [
+        { id: 'port_in', group: 'in' }
+      ],
+      groups: { 
+        in: { 
+          position: 'top', 
+          attrs: { 
+            circle: { 
+              r: 4, 
+              magnet: true, 
+              stroke: '#ff4d4f', 
+              fill: '#fff',
+              style: { visibility: 'visible' }
+            } 
           } 
         } 
       } 
-    } 
-  },
-});
+    },
+  });
+} catch (e) {
+  // 节点已注册，忽略错误
+}
 
 const nodeTypeMap = {
   START: { label: '开始', type: 'start-node' },
@@ -154,7 +196,7 @@ const Designer = () => {
   const [taskName, setTaskName] = useState('加载中...');
   
   const [selectedNode, setSelectedNode] = useState(null);
-  const [formVisible, setFormVisible] = useState(false);
+  const [formVisible, setFormVisible] = useState(true);
   const [debugVisible, setDebugVisible] = useState(false);
 
   const [contextMenu, setContextMenu] = useState({
@@ -176,10 +218,10 @@ const Designer = () => {
       connecting: {
         snap: true, allowBlank: false, allowLoop: false, allowNode: false,
         router: {
-          name: 'manhattan',
+          name: 'orth',
           args: {
-            startDirections: ['bottom'],
-            endDirections: ['top'],
+            startDirections: ['top', 'bottom', 'left', 'right'],
+            endDirections: ['top', 'bottom', 'left', 'right'],
             padding: 10
           }
         },
@@ -286,16 +328,20 @@ const Designer = () => {
       data: { type, config: { name: config.label } },
       ports: isStartEnd ? undefined : {
         items: [
-          { id: 'port_in', group: 'in' },
-          { id: 'port_out', group: 'out' },
+          { id: 'port_top', group: 'top' },
+          { id: 'port_bottom', group: 'bottom' },
+          { id: 'port_left', group: 'left' },
+          { id: 'port_right', group: 'right' }
         ]
       }
     });
     
     if (!isStartEnd && config.color) {
       node.attr('body/stroke', config.color);
-      node.attr('ports/groups/in/attrs/circle/stroke', config.color);
-      node.attr('ports/groups/out/attrs/circle/stroke', config.color);
+      node.attr('ports/groups/top/attrs/circle/stroke', config.color);
+      node.attr('ports/groups/bottom/attrs/circle/stroke', config.color);
+      node.attr('ports/groups/left/attrs/circle/stroke', config.color);
+      node.attr('ports/groups/right/attrs/circle/stroke', config.color);
     }
 
     dnd.start(node, e.nativeEvent);
@@ -372,20 +418,23 @@ const Designer = () => {
       <Drawer
         title={`节点配置 - ${selectedNode?.getData()?.type || '未知'}`}
         placement="right"
-        width={500}
-        onClose={() => setFormVisible(false)}
+        size={500}
+        onClose={() => setFormVisible(true)}
         open={formVisible}
-        destroyOnClose
+        destroyOnHidden
       >
-        {selectedNode && (
+        {selectedNode ? (
           <NodeForm 
             nodeData={selectedNode.getData()} 
             onSave={(data) => {
               selectedNode.setData(data);
               selectedNode.attr('label/text', data.config.name);
-              setFormVisible(false);
             }} 
           />
+        ) : (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+            <p>请选择一个节点进行配置</p>
+          </div>
         )}
       </Drawer>
 
@@ -410,7 +459,6 @@ const Designer = () => {
             setContextMenu({ ...contextMenu, visible: false });
             if (e.key === 'edit' && contextMenu.node) {
               setSelectedNode(contextMenu.node);
-              setFormVisible(true);
             } else if (e.key === 'delete' && contextMenu.node) {
               graph?.removeCells([contextMenu.node]);
             } else if (e.key === 'center') {
