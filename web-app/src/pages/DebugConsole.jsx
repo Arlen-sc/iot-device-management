@@ -130,6 +130,57 @@ const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
     );
   };
 
+  const buildDisplayLogs = useCallback((rawLogs) => {
+    if (!Array.isArray(rawLogs) || rawLogs.length === 0) {
+      return [];
+    }
+
+    const displayed = [];
+    const nodeLatestMap = new Map();
+
+    rawLogs.forEach((log) => {
+      if (typeof log === 'string') {
+        displayed.push(log);
+        return;
+      }
+
+      const message = String(log?.message || '');
+      const nodeName = log?.nodeName;
+      const actionType = log?.actionType;
+      const isNodeLog = nodeName && nodeName !== '-' && actionType && actionType !== '-' && actionType !== 'SYSTEM';
+      const isNodeFinal =
+        message.includes('【节点执行成功】') ||
+        message.includes('【节点执行失败】') ||
+        message.includes('【节点执行异常】') ||
+        message.includes('【节点执行警告】');
+
+      if (isNodeLog) {
+        const key = `${actionType}:${nodeName}`;
+        if (isNodeFinal) {
+          nodeLatestMap.set(key, log);
+        } else if (!nodeLatestMap.has(key)) {
+          // 若没有最终状态，先保留首条，后续有最终状态会覆盖
+          nodeLatestMap.set(key, log);
+        }
+        return;
+      }
+
+      const isImportantSystem =
+        message.includes('流程执行开始') ||
+        message.includes('流程执行结束') ||
+        message.includes('Flow config loaded') ||
+        message.includes('等待数据传入') ||
+        log?.level === 'ERROR';
+      if (isImportantSystem) {
+        displayed.push(log);
+      }
+    });
+
+    const nodeLogs = Array.from(nodeLatestMap.values());
+
+    return [...displayed, ...nodeLogs];
+  }, []);
+
   const varsColumns = [
     { title: '变量名', dataIndex: 'key', width: '40%', render: t => <span style={{color: '#1890ff', fontFamily: 'monospace'}}>{t}</span> },
     { title: '值', dataIndex: 'value', render: t => <span style={{fontFamily: 'monospace'}}>{t}</span> }
@@ -139,6 +190,8 @@ const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
     key: k, 
     value: typeof result.variables[k] === 'object' ? JSON.stringify(result.variables[k]) : String(result.variables[k])
   })) : [];
+
+  const displayLogs = buildDisplayLogs(logs);
 
   return (
     <Modal
@@ -178,7 +231,7 @@ const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
               <div style={{color: '#666'}}>等待运行...</div>
             ) : (
               <>
-                {logs.length ? logs.map(renderLogEntry) : <div style={{color: '#999'}}>[SYSTEM] 当前调试窗口暂无日志</div>}
+                {displayLogs.length ? displayLogs.map(renderLogEntry) : <div style={{color: '#999'}}>[SYSTEM] 当前调试窗口暂无日志</div>}
                 {!running && result?.status && result.status !== 'RUNNING' && (
                   <div style={{ color: result.status === 'SUCCESS' ? '#52c41a' : '#ff4d4f', marginTop: 16, fontWeight: 'bold' }}>
                     [SYSTEM] 执行结束，状态: {result.status}

@@ -7,7 +7,8 @@ import {
   DeleteOutlined,
   CodeOutlined,
   BugOutlined,
-  PlusOutlined
+  PlusOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
@@ -55,15 +56,19 @@ const TaskList = () => {
 
   useEffect(() => {
     loadData();
-    const timer = setInterval(loadData, 5000); // Poll for running status
-    return () => clearInterval(timer);
   }, []);
 
   const handleStart = async (id) => {
     try {
       await api.post(`/task-flow-configs/${id}/start?interval=1000`);
       message.success('任务已启动持续监听');
-      loadData();
+      setRunningMap(prev => ({
+        ...prev,
+        [id]: {
+          configId: id,
+          iterationCount: 0
+        }
+      }));
     } catch (err) {
       message.error('启动失败: ' + err.message);
     }
@@ -73,7 +78,11 @@ const TaskList = () => {
     try {
       const result = await api.post(`/task-flow-configs/${id}/stop`);
       message.success(`任务已停止 (${result.iterations || 0} 次迭代)`);
-      loadData();
+      setRunningMap(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     } catch (err) {
       message.error('停止失败: ' + err.message);
     }
@@ -83,7 +92,12 @@ const TaskList = () => {
     try {
       await api.delete(`/task-flow-configs/${id}`);
       message.success('删除成功');
-      loadData();
+      setData(prev => prev.filter(item => item.id !== id));
+      setRunningMap(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     } catch (err) {
       message.error('删除失败: ' + err.message);
     }
@@ -203,9 +217,14 @@ const TaskList = () => {
       <Card bordered={false} style={{ borderRadius: 8, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}>
         <div className="page-header">
           <Title level={4} style={{ margin: 0, color: '#0f172a' }}>任务管理</Title>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingTask(null); setFormVisible(true); }}>
-            新建任务
-          </Button>
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={loadData}>
+              刷新
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingTask(null); setFormVisible(true); }}>
+              新建任务
+            </Button>
+          </Space>
         </div>
         
         <Table 
@@ -222,7 +241,10 @@ const TaskList = () => {
         visible={formVisible} 
         initialValues={editingTask} 
         onCancel={() => setFormVisible(false)}
-        onSuccess={() => { setFormVisible(false); loadData(); }}
+        onSuccess={() => {
+          setFormVisible(false);
+          message.success('保存成功，请点击刷新获取最新列表');
+        }}
       />
       
       {logsVisible && (
@@ -238,7 +260,7 @@ const TaskList = () => {
           visible={debugVisible} 
           taskId={currentTaskId} 
           onCancel={() => setDebugVisible(false)} 
-          onSuccess={loadData}
+          onSuccess={() => {}}
         />
       )}
     </div>
