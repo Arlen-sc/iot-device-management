@@ -138,6 +138,8 @@ spring:
 
 请参考 [开发指南](docs/development-guide.md) 获取详细的开发信息。
 
+软件注册与授权（功能限制/时间限制/任务数量限制/注册机）说明见：[软件注册与授权说明](docs/software-license.md)。
+
 **前端流程设计器 · 节点配置表单（NodeForm）扩展**（目录约定、检查清单、antd 约束）：见 [节点表单扩展指南](docs/node-form-extensibility.md)；IDE 规则见 `.cursor/rules/node-form.mdc`。
 
 ## 协议扩展

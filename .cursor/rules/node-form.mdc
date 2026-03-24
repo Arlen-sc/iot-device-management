@@ -1,0 +1,47 @@
+---
+description: 流程设计器 NodeForm 扩展规范（目录、注册表、normalize、antd 约束）
+globs: web-app/src/pages/NodeForm.jsx,web-app/src/pages/node-form/**/*
+alwaysApply: false
+---
+
+# 节点表单（NodeForm）扩展规则
+
+编辑 `NodeForm.jsx` 或 `web-app/src/pages/node-form/**` 时遵守以下约定；完整说明见仓库 **`docs/node-form-extensibility.md`**。
+
+## 1. 文件分工
+
+| 文件/目录 | 职责 |
+|-----------|------|
+| `NodeForm.jsx` | Form 外壳、自动保存、设备/数据源等副作用；**不再**使用巨型 `switch`，新类型只加 `fields/XxxFields.jsx` + `fieldRegistry.js`。 |
+| `node-form/constants.js` | 下拉选项、与具体节点 UI 无关的枚举常量。 |
+| `node-form/normalizeNodeConfig.js` | `buildNodeFormInitialValues`：画布 `config` → 表单初始值；数组清洗、兼容旧字段、防止 `Form.List` 崩溃。 |
+| `node-form/fieldRegistry.js` | `NODE_FIELD_COMPONENTS`：`节点类型 → React 组件`。 |
+| `node-form/fields/*.jsx` | 各节点专属表单项（仅 JSX + `Form.Item`），命名建议 `XxxFields.jsx`。 |
+
+## 2. 新增/修改节点表单时必须完成
+
+1. **类型一致**：后端 `NodeHandler#getType()`、设计器 `Designer.jsx` 的 `nodeTypeMap` 与侧栏 `handleDragStart(type)` 使用**同一字符串**（建议全大写，与 `FlowJsonSupport` 一致）。
+2. **规范化**：若配置含动态列表或历史字段兼容，在 `normalizeNodeConfig.js` 增加分支或 `normalizeXxx` 函数，并在 `buildNodeFormInitialValues` 中调用。
+3. **注册**：在 `fieldRegistry.js` 注册字段组件；`NodeForm` 内优先 `const C = NODE_FIELD_COMPONENTS[type]; if (C) return <C .../>;`，再 `switch` 兜底（迁移期）。
+4. **文档**：更新 **`docs/node-form-extensibility.md`** 或 **`docs/development-guide.md`** 中节点列表/说明；结构或约定变更需在开发文档中记录（项目要求）。
+5. **注释**：关键逻辑须有**中文注释**（项目要求）。
+
+## 3. Ant Design 与设计器约束
+
+- 设计器路由 **未** 包裹 antd `<App>`，**禁止**在 `NodeForm` 及相关 fields 中使用 `App.useApp()`；使用 **`import { message } from 'antd'`** 等静态 API，否则易导致**白屏**。
+- `nodeData.config` 可能为 `null`/非对象；初始化必须安全展开，见 `buildNodeFormInitialValues`。
+- `Form.List` 数据源必须是**对象数组**；禁止把字符串等异常类型直接交给 List。
+
+## 4. 字段子组件建议 props
+
+```tsx
+// 示例：与 NodeForm 约定一致即可
+function XxxFields({ form, variableOptions, deviceOptions, ... }) { ... }
+```
+
+由 `NodeForm` 注入 `form`、`variableOptions`；设备类节点额外注入 `deviceOptions`、`selectedDevice`、`onDeviceChange` 等。
+
+## 5. 规模扩展（约 30+ 节点）
+
+- 优先 **一节点一文件** `fields/XxxFields.jsx`，减少单文件冲突。
+- 可选：`React.lazy` + `Suspense` 在注册表中懒加载字段组件。
