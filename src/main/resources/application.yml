@@ -123,3 +123,10 @@ logging:
     # 控制台日志输出格式
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 
+# 软件授权配置
+license:
+  # 授权签名密钥（生产环境请通过环境变量覆盖）
+  secret: IOT-LICENSE-SECRET-CHANGE-ME
+  # 默认试用天数
+  trial-days: 7
+

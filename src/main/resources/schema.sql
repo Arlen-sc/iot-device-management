@@ -143,6 +143,20 @@ CREATE TABLE IF NOT EXISTS data_source (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Software License
+CREATE TABLE IF NOT EXISTS software_license (
+    id INTEGER PRIMARY KEY,
+    license_code TEXT,
+    machine_code VARCHAR(128),
+    expire_at DATETIME,
+    max_tasks INTEGER DEFAULT 3,
+    features_json TEXT,
+    status INTEGER DEFAULT 0, -- 0=试用，1=正式授权
+    activated_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Seed Data: Device Categories
 INSERT OR IGNORE INTO device_category (code, name, sort_order, description) VALUES
     ('SENSORS', 'Sensors', 1, 'Environmental and industrial sensors'),

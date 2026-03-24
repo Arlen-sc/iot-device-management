@@ -1,6 +1,8 @@
 package com.iot.controller;
 
 import com.iot.entity.TaskFlowConfig;
+import com.iot.license.LicenseFeatures;
+import com.iot.service.LicenseService;
 import com.iot.service.TaskFlowConfigService;
 import com.iot.task.engine.FlowEngine;
 import com.iot.util.R;
@@ -17,6 +19,7 @@ public class TaskFlowConfigController {
 
     private final TaskFlowConfigService taskFlowConfigService;
     private final FlowEngine flowEngine;
+    private final LicenseService licenseService;
 
     @GetMapping
     public R<List<TaskFlowConfig>> list() {
@@ -39,15 +42,23 @@ public class TaskFlowConfigController {
     @PostMapping
     public R<Boolean> create(@RequestBody TaskFlowConfig taskFlowConfig) {
         try {
+            licenseService.assertFeatureAllowed(LicenseFeatures.TASK_MANAGEMENT, "任务管理");
+            licenseService.assertTaskQuotaAllowed();
             return R.ok(taskFlowConfigService.save(taskFlowConfig));
         } catch (Exception e) {
-            return R.error(e.getMessage());
+            return R.error(403, e.getMessage());
         }
     }
 
     @PutMapping("/{id}")
     public R<Boolean> update(@PathVariable Long id, @RequestBody TaskFlowConfig taskFlowConfig) {
         try {
+            boolean editingFlow = taskFlowConfig.getFlowJson() != null || taskFlowConfig.getStartNodeConfig() != null;
+            if (editingFlow) {
+                licenseService.assertFeatureAllowed(LicenseFeatures.FLOW_DESIGN, "流程设计");
+            } else {
+                licenseService.assertFeatureAllowed(LicenseFeatures.TASK_MANAGEMENT, "任务管理");
+            }
             TaskFlowConfig existing = taskFlowConfigService.getById(id);
             if (existing == null) {
                 return R.error("Task flow config not found");
@@ -64,22 +75,24 @@ public class TaskFlowConfigController {
             if (taskFlowConfig.getStatus() != null) existing.setStatus(taskFlowConfig.getStatus());
             return R.ok(taskFlowConfigService.updateById(existing));
         } catch (Exception e) {
-            return R.error(e.getMessage());
+            return R.error(403, e.getMessage());
         }
     }
 
     @DeleteMapping("/{id}")
     public R<Boolean> delete(@PathVariable Long id) {
         try {
+            licenseService.assertFeatureAllowed(LicenseFeatures.TASK_MANAGEMENT, "任务管理");
             return R.ok(taskFlowConfigService.removeById(id));
         } catch (Exception e) {
-            return R.error(e.getMessage());
+            return R.error(403, e.getMessage());
         }
     }
 
     @PostMapping("/{id}/execute")
     public R<?> execute(@PathVariable Long id) {
         try {
+            licenseService.assertFeatureAllowed(LicenseFeatures.TASK_EXECUTION, "任务执行");
             TaskFlowConfig config = taskFlowConfigService.getById(id);
             if (config == null) {
                 return R.error("Task flow config not found");
@@ -94,17 +107,18 @@ public class TaskFlowConfigController {
             result.put("variables", context.getVariables());
             return R.ok(result);
         } catch (Exception e) {
-            return R.error("Execution failed: " + e.getMessage());
+            return R.error(403, "Execution failed: " + e.getMessage());
         }
     }
 
     @PostMapping("/{id}/debug/start")
     public R<?> startDebug(@PathVariable Long id) {
         try {
+            licenseService.assertFeatureAllowed(LicenseFeatures.DEBUG, "调试");
             String sessionId = flowEngine.startDebugSession(id);
             return R.ok(Map.of("sessionId", sessionId));
         } catch (Exception e) {
-            return R.error("Start debug failed: " + e.getMessage());
+            return R.error(403, "Start debug failed: " + e.getMessage());
         }
     }
 
@@ -123,10 +137,11 @@ public class TaskFlowConfigController {
     public R<?> startContinuous(@PathVariable Long id,
                                 @RequestParam(defaultValue = "1000") int interval) {
         try {
+            licenseService.assertFeatureAllowed(LicenseFeatures.TASK_EXECUTION, "任务执行");
             var result = flowEngine.startContinuousFlow(id, interval);
             return R.ok(result);
         } catch (Exception e) {
-            return R.error("Start failed: " + e.getMessage());
+            return R.error(403, "Start failed: " + e.getMessage());
         }
     }
 
