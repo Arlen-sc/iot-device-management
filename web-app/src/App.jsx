@@ -8,6 +8,7 @@ import DeviceList from './pages/DeviceList';
 import CategoryList from './pages/CategoryList';
 import DataSourceList from './pages/DataSourceList';
 import Designer from './pages/Designer';
+import LicenseCenter from './pages/LicenseCenter';
 
 function App() {
   return (
@@ -54,6 +55,7 @@ function App() {
           <Route path="/devices" element={<AppLayout><DeviceList /></AppLayout>} />
           <Route path="/categories" element={<AppLayout><CategoryList /></AppLayout>} />
           <Route path="/datasources" element={<AppLayout><DataSourceList /></AppLayout>} />
+          <Route path="/license" element={<AppLayout><LicenseCenter /></AppLayout>} />
           
           {/* Fallback for un-migrated pages */}
           <Route path="/bridges" element={<AppLayout><div className="page-container">数据桥接 (正在迁移至 React...)</div></AppLayout>} />

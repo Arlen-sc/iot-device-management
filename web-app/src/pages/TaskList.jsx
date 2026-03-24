@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Modal, message, Popconfirm, Card, Typography, Tooltip } from 'antd';
+import { Table, Button, Space, Tag, message, Popconfirm, Card, Typography, Tooltip } from 'antd';
 import { 
   PlayCircleOutlined, 
   StopOutlined, 
@@ -175,10 +175,22 @@ const TaskList = () => {
         return (
           <Space size="small">
             <Tooltip title="设计流程">
-              <Button type="text" style={{color: '#4f46e5'}} icon={<CodeOutlined />} onClick={() => navigate(`/designer/${record.id}`)} />
+              <Button
+                type="text"
+                style={{color: '#4f46e5'}}
+                icon={<CodeOutlined />}
+                onClick={() => navigate(`/designer/${record.id}`)}
+              />
             </Tooltip>
             <Tooltip title="编辑属性">
-              <Button type="text" icon={<EditOutlined />} onClick={() => { setEditingTask(record); setFormVisible(true); }} />
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => {
+                  setEditingTask(record);
+                  setFormVisible(true);
+                }}
+              />
             </Tooltip>
             
             {isRunning ? (
@@ -187,13 +199,26 @@ const TaskList = () => {
               </Tooltip>
             ) : (
               <Tooltip title="启动">
-                <Button type="text" style={{color: '#10b981'}} icon={<PlayCircleOutlined />} onClick={() => handleStart(record.id)} />
+                <Button
+                  type="text"
+                  style={{color: '#10b981'}}
+                  icon={<PlayCircleOutlined />}
+                  onClick={() => handleStart(record.id)}
+                />
               </Tooltip>
             )}
             
             {record.triggerType === 'ONCE' && (
               <Tooltip title="调试">
-                <Button type="text" style={{color: '#f59e0b'}} icon={<BugOutlined />} onClick={() => { setCurrentTaskId(record.id); setDebugVisible(true); }} />
+                <Button
+                  type="text"
+                  style={{color: '#f59e0b'}}
+                  icon={<BugOutlined />}
+                  onClick={() => {
+                    setCurrentTaskId(record.id);
+                    setDebugVisible(true);
+                  }}
+                />
               </Tooltip>
             )}
             
@@ -203,7 +228,11 @@ const TaskList = () => {
             
             <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
               <Tooltip title="删除">
-                <Button type="text" danger icon={<DeleteOutlined />} />
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                />
               </Tooltip>
             </Popconfirm>
           </Space>
@@ -221,12 +250,19 @@ const TaskList = () => {
             <Button icon={<ReloadOutlined />} onClick={loadData}>
               刷新
             </Button>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditingTask(null); setFormVisible(true); }}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditingTask(null);
+                setFormVisible(true);
+              }}
+            >
               新建任务
             </Button>
           </Space>
         </div>
-        
+
         <Table 
           columns={columns} 
           dataSource={data} 

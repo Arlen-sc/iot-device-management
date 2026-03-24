@@ -4,6 +4,7 @@ import api from '../utils/api';
 import ExecutionLogPanel from '../components/ExecutionLogPanel';
 
 const FULL_PAYLOAD_STORAGE_KEY = 'debugConsole.showFullPayload';
+const DEBUG_LOG_POLL_INTERVAL_MS = 5000;
 
 const parseStructuredValue = (value) => {
   if (value == null) return null;
@@ -83,9 +84,10 @@ const DebugConsole = ({ visible, taskId, onCancel, onSuccess }) => {
         });
         return;
       }
+      // 中文注释：调试日志轮询改为 5 秒一次，降低 /debug/{sid}/logs 的请求频率与后端日志刷屏。
       pollTimerRef.current = setTimeout(() => {
         void fetchLogs(sid);
-      }, 400);
+      }, DEBUG_LOG_POLL_INTERVAL_MS);
     } catch (err) {
       setRunning(false);
       setResult({

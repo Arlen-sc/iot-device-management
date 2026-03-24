@@ -26,7 +26,7 @@ const AppLayout = ({ children }) => {
     { key: '/datasources', icon: <DatabaseOutlined />, label: '数据源管理' },
     { key: '/bridges', icon: <ApiOutlined />, label: '数据桥接' },
     { key: '/alerts', icon: <AlertOutlined />, label: '告警管理' },
-    { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
+    { key: '/license', icon: <SettingOutlined />, label: '软件注册' },
   ];
 
   return (
