@@ -414,6 +414,93 @@ const Designer = () => {
     }
   };
 
+  const extractNodeOutputVariables = (nodeCell) => {
+    const vars = [];
+    const nodeId = nodeCell?.id;
+    const type = nodeCell?.data?.type;
+    const cfg = nodeCell?.data?.config || {};
+
+    const addVar = (v) => {
+      if (typeof v === 'string' && v.trim()) {
+        vars.push(v.trim());
+      }
+    };
+
+    addVar(cfg.outputVariable);
+    addVar(cfg.target);
+
+    if (type === 'SCRIPT' && Array.isArray(cfg.operations)) {
+      cfg.operations.forEach(op => addVar(op?.target));
+    }
+    if (type === 'TCP_SERVER') {
+      const ov = typeof cfg.outputVariable === 'string' && cfg.outputVariable.trim()
+        ? cfg.outputVariable.trim()
+        : 'tcpServerData';
+      addVar(`${ov}_kv`);
+    }
+    if (nodeId) {
+      addVar(`node_${nodeId}_result`);
+    }
+    return vars;
+  };
+
+  const buildConditionVariableOptions = () => {
+    if (!graph || !selectedNodeRef.current) return [];
+    const json = graph.toJSON();
+    const cells = Array.isArray(json?.cells) ? json.cells : [];
+    const currentNodeId = selectedNodeRef.current.id;
+
+    const nodeMap = new Map();
+    const incomingMap = new Map();
+    cells.forEach(cell => {
+      if (!cell) return;
+      const isEdge = cell.shape === 'edge' || (cell.source && cell.target && !cell.position);
+      if (isEdge) {
+        const src = typeof cell.source === 'object' ? cell.source?.cell : cell.source;
+        const tgt = typeof cell.target === 'object' ? cell.target?.cell : cell.target;
+        if (src && tgt) {
+          const arr = incomingMap.get(tgt) || [];
+          arr.push(src);
+          incomingMap.set(tgt, arr);
+        }
+        return;
+      }
+      if (cell.id) {
+        nodeMap.set(cell.id, cell);
+      }
+    });
+
+    const collected = new Set();
+
+    // 1) Flow global variables
+    const globals = Array.isArray(json?.variables) ? json.variables : [];
+    globals.forEach(v => {
+      const name = typeof v?.name === 'string' ? v.name.trim() : '';
+      if (name) collected.add(name);
+    });
+
+    // 2) Upstream node outputs (reverse BFS)
+    const queue = [...(incomingMap.get(currentNodeId) || [])];
+    const visited = new Set();
+    while (queue.length > 0) {
+      const nid = queue.shift();
+      if (!nid || visited.has(nid)) continue;
+      visited.add(nid);
+      const nodeCell = nodeMap.get(nid);
+      if (nodeCell) {
+        extractNodeOutputVariables(nodeCell).forEach(v => collected.add(v));
+      }
+      const parents = incomingMap.get(nid) || [];
+      parents.forEach(p => {
+        if (!visited.has(p)) queue.push(p);
+      });
+    }
+
+    return Array.from(collected)
+      .sort((a, b) => a.localeCompare(b))
+      .map(v => ({ value: v, label: v }));
+  };
+
   return (
     <div className="designer-layout">
       {/* Header */}
@@ -464,6 +551,8 @@ const Designer = () => {
             <div className="stencil-item tcp" onMouseDown={e => handleDragStart(e, 'TCP_CLIENT')}>TCP 客户端</div>
             <div className="stencil-item tcp" style={{ borderColor: '#d46b08' }} onMouseDown={e => handleDragStart(e, 'TCP_SERVER')}>TCP 服务端</div>
             <div className="stencil-item http" onMouseDown={e => handleDragStart(e, 'HTTP_REQUEST')}>HTTP 请求</div>
+            <div className="stencil-item default" style={{ borderColor: '#eb2f96' }} onMouseDown={e => handleDragStart(e, 'PLC_READ')}>PLC 读取</div>
+            <div className="stencil-item default" style={{ borderColor: '#eb2f96' }} onMouseDown={e => handleDragStart(e, 'PLC_WRITE')}>PLC 写入</div>
           </div>
           
           <div className="stencil-group">数据处理</div>
@@ -487,6 +576,7 @@ const Designer = () => {
             {selectedNode ? (
               <NodeForm 
                 nodeData={selectedNode?.getData() || {}} 
+                variableOptions={buildConditionVariableOptions()}
                 onSave={(data) => {
                   const currentNode = selectedNodeRef.current;
                   if (currentNode) {

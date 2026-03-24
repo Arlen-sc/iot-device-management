@@ -16,7 +16,8 @@ public class FlowExecutionLog {
 
     private String flowName;
 
-    // private String eventId;
+    @TableField("event_id")
+    private String eventId;
 
     private String nodeId;
 

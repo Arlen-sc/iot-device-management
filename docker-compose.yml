@@ -1,33 +1,55 @@
+# Docker Compose 版本
 version: '3.8'
 
+# 服务定义
 services:
+  # IoT 主应用服务
   iot-app:
+    # 使用当前目录 Dockerfile 构建镜像
     build: .
+    # 容器名称
     container_name: iot-device-management
+    # 端口映射（宿主机:容器）
     ports:
       - "18082:18082"
+    # 挂载数据目录，持久化 SQLite 数据
     volumes:
       - ./data:/app/data
+    # 环境变量
     environment:
+      # 指定运行环境为 prod
       - SPRING_PROFILES_ACTIVE=prod
+    # 依赖服务（先启动 redis）
     depends_on:
       - redis
+    # 加入自定义网络
     networks:
       - iot-network
 
+  # Redis 缓存服务
   redis:
+    # 使用轻量级 Redis 官方镜像
     image: redis:7-alpine
+    # 容器名称
     container_name: iot-redis
+    # Redis 端口映射
     ports:
       - "6379:6379"
+    # Redis 数据持久化卷
     volumes:
       - redis-data:/data
+    # 加入自定义网络
     networks:
       - iot-network
 
+# 命名卷定义
 volumes:
+  # Redis 数据卷
   redis-data:
 
+# 网络定义
 networks:
+  # 应用与 Redis 共享网络
   iot-network:
+    # 使用 bridge 网络驱动
     driver: bridge

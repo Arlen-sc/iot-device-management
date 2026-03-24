@@ -1,8 +1,5 @@
 package com.iot.task.node.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.iot.entity.FlowExecutionLog;
-import com.iot.mapper.FlowExecutionLogMapper;
 import com.iot.task.engine.FlowExecutionContext;
 import com.iot.task.model.FlowNode;
 import com.iot.task.node.NodeHandler;
@@ -14,7 +11,6 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * LOG node - records data to execution log and saves to SQLite database.
@@ -30,13 +26,7 @@ import java.util.concurrent.CompletableFuture;
 @Component
 public class LogNodeHandler implements NodeHandler {
 
-    private final ObjectMapper objectMapper;
-    private final FlowExecutionLogMapper flowExecutionLogMapper;
-
-    public LogNodeHandler(ObjectMapper objectMapper, FlowExecutionLogMapper flowExecutionLogMapper) {
-        this.objectMapper = objectMapper;
-        this.flowExecutionLogMapper = flowExecutionLogMapper;
-    }
+    public LogNodeHandler() {}
 
     @Override
     public String getType() {
@@ -77,8 +67,8 @@ public class LogNodeHandler implements NodeHandler {
                 logEntry.put("data", data);
             }
 
-            // Log to execution context
-            context.addLog("[" + logLevel + "] " + message + (data != null ? " | data=" + abbreviate(String.valueOf(data), 200) : ""));
+            // 中文注释：LOG 节点统一写入执行上下文，由 FlowExecutor 聚合后统一入库，避免重复写库。
+            context.addLog(logLevel.toUpperCase(Locale.ROOT), message, getType(), node.getName(), data, null);
 
             // Log to console
             switch (logLevel.toUpperCase()) {
@@ -87,10 +77,9 @@ public class LogNodeHandler implements NodeHandler {
                 default -> log.info("LOG node '{}': {}", node.getName(), message);
             }
 
-            // Save to SQLite database asynchronously to avoid blocking the flow execution
+            // saveToDb 参数保留兼容，但不再直接写库（统一由 FlowExecutor 聚合入库）。
             if (saveToDb) {
-                CompletableFuture.runAsync(() -> saveToDatabase(node, context, logLevel, message, data));
-                context.addLog("Log entry async saved to database (flow_execution_log)");
+                context.addLog("INFO", "LOG 节点已加入统一日志聚合入库队列", getType(), node.getName(), null, null);
             }
 
             // Store in variable
@@ -103,29 +92,6 @@ public class LogNodeHandler implements NodeHandler {
             log.error("LOG node '{}' failed: {}", node.getName(), e.getMessage(), e);
             context.addLog("LOG error: " + e.getMessage());
             return NodeResult.error("LOG failed: " + e.getMessage());
-        }
-    }
-
-    private void saveToDatabase(FlowNode node, FlowExecutionContext context,
-                                 String level, String message, Object data) {
-        try {
-            FlowExecutionLog logRecord = new FlowExecutionLog();
-            logRecord.setFlowConfigId(parseFlowConfigId(context.getFlowConfigId()));
-            logRecord.setFlowName(context.getFlowName());
-            // logRecord.setEventId(context.getEventId());
-            logRecord.setNodeId(node.getId());
-            logRecord.setNodeName(node.getName());
-            logRecord.setActionType(node.getType());
-            logRecord.setLevel(level);
-            logRecord.setMessage(message);
-            if (data != null) {
-                logRecord.setDataJson(objectMapper.writeValueAsString(data));
-            }
-            logRecord.setCreatedAt(LocalDateTime.now());
-
-            flowExecutionLogMapper.insert(logRecord);
-        } catch (Exception e) {
-            log.error("Failed to save log to database: {}", e.getMessage());
         }
     }
 
@@ -156,19 +122,4 @@ public class LogNodeHandler implements NodeHandler {
         return def;
     }
 
-    private static Long parseFlowConfigId(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return Long.valueOf(raw);
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private static String abbreviate(String s, int max) {
-        if (s == null) return "";
-        return s.length() <= max ? s : s.substring(0, max) + "...";
-    }
 }

@@ -1,50 +1,80 @@
+# 服务基础配置
 server:
+  # Web 服务端口
   port: 8080
 
+# Spring 主配置
 spring:
   application:
+    # 应用名称（用于日志与监控标识）
     name: iot-device-management
 
+  # 数据源配置（默认使用本地 SQLite）
   datasource:
+    # SQLite 数据库文件路径
     url: jdbc:sqlite:data/iot.db
+    # SQLite JDBC 驱动
     driver-class-name: org.sqlite.JDBC
+    # Hikari 连接池参数
     hikari:
+      # 最大连接数（SQLite 建议保持较小）
       maximum-pool-size: 1
+      # 最小空闲连接数
       minimum-idle: 1
+      # 获取连接超时时间（毫秒）
       connection-timeout: 30000
+      # 空闲超时时间（毫秒）
       idle-timeout: 600000
+      # 连接最大生命周期（毫秒）
       max-lifetime: 1800000
 
+  # SQL 初始化配置（启动时自动建表）
   sql:
     init:
+      # always: 每次启动都执行 schema
       mode: always
+      # 表结构脚本位置
       schema-locations: classpath:schema.sql
 
   # Redis缓存配置（可选）
   data:
     redis:
+      # Redis 主机
       host: localhost
+      # Redis 端口
       port: 6379
+      # Redis 数据库索引
       database: 0
+      # 连接超时（毫秒）
       timeout: 3000
       lettuce:
         pool:
+          # 连接池最大活跃连接
           max-active: 8
+          # 连接池最大空闲连接
           max-idle: 8
+          # 连接池最小空闲连接
           min-idle: 0
+          # 获取连接最大等待时间（-1 表示不限制）
           max-wait: -1ms
 
   # 邮件配置（可选）
   mail:
+    # SMTP 服务器地址
     host: smtp.example.com
+    # SMTP 端口（587 常用于 STARTTLS）
     port: 587
+    # 发件账号
     username: your-email@example.com
+    # 发件密码/授权码
     password: your-password
     properties:
       mail:
         smtp:
+          # 是否启用 SMTP 认证
           auth: true
           starttls:
+            # 是否启用 STARTTLS
             enable: true
 
   # Actuator配置
@@ -52,30 +82,44 @@ spring:
     endpoints:
       web:
         exposure:
+          # 暴露的监控端点
           include: health,info,metrics
     endpoint:
       health:
+        # 健康检查详情展示策略
         show-details: always
 
+# MyBatis-Plus 配置
 mybatis-plus:
   configuration:
+    # 下划线转驼峰映射
     map-underscore-to-camel-case: true
+    # SQL 日志输出实现
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   global-config:
     db-config:
+      # 数据库类型
       db-type: sqlite
 
 # Jasypt加密配置
 jasypt:
   encryptor:
+    # 加解密口令（生产环境请用环境变量覆盖）
     password: iot-device-management-secret-key-2024
+    # 加密算法
     algorithm: PBEWithMD5AndDES
 
 # 日志配置
 logging:
+  flow:
+    # 流程日志详细模式：false=精简，true=详细
+    verbose: true
   level:
+    # 项目包日志级别
     com.iot: DEBUG
+    # Spring Security 日志级别
     org.springframework.security: DEBUG
   pattern:
+    # 控制台日志输出格式
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
 

@@ -27,6 +27,9 @@ public class FlowExecutionContext {
     private String eventId;
     private boolean completed;
     private List<ExecutionLogEntry> executionLog = new CopyOnWriteArrayList<>();
+    /** 当前线程正在执行的节点上下文（用于将 handler 内 addLog 自动归属到节点） */
+    private final ThreadLocal<String> currentNodeTypeTL = new ThreadLocal<>();
+    private final ThreadLocal<String> currentNodeNameTL = new ThreadLocal<>();
 
     /** Guards against infinite loops (e.g. TCP RECEIVE + CONDITION retry). */
     private final AtomicInteger executionStepCount = new AtomicInteger(0);
@@ -47,6 +50,13 @@ public class FlowExecutionContext {
     }
 
     public void addLog(String message) {
+        // 中文注释：优先绑定到当前节点；无节点上下文时回退为系统日志。
+        String actionType = currentNodeTypeTL.get();
+        String nodeName = currentNodeNameTL.get();
+        if (actionType != null && nodeName != null) {
+            addLog("INFO", message, actionType, nodeName, null, null);
+            return;
+        }
         addLog("SYSTEM", message, "SYSTEM", "System", null, null);
     }
 
@@ -64,6 +74,16 @@ public class FlowExecutionContext {
         entry.setData(data);
         entry.setDurationMs(durationMs);
         executionLog.add(entry);
+    }
+
+    public void enterNodeLogScope(String nodeType, String nodeName) {
+        currentNodeTypeTL.set(nodeType);
+        currentNodeNameTL.set(nodeName);
+    }
+
+    public void exitNodeLogScope() {
+        currentNodeTypeTL.remove();
+        currentNodeNameTL.remove();
     }
 
     public Device getDevice() {

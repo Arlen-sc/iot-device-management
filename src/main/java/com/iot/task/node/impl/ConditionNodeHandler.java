@@ -38,6 +38,9 @@ public class ConditionNodeHandler implements NodeHandler {
                     branches != null ? branches.size() : 0, logic);
 
             if (branches != null && !branches.isEmpty()) {
+                Map<String, Object> evalSummary = new java.util.LinkedHashMap<>();
+                java.util.List<Map<String, Object>> branchDetails = new java.util.ArrayList<>();
+                evalSummary.put("logic", logic);
                 // Check if we are combining conditions into a single branch evaluation
                 // In a proper OR/AND we need to evaluate all branches to see if the overall logic is met.
                 // Wait, the previous logic was: each branch has a condition and a nextNodeId.
@@ -58,43 +61,72 @@ public class ConditionNodeHandler implements NodeHandler {
                         Map<String, Object> condition = (Map<String, Object>) branch.get("condition");
                         String nextNodeId = (String) branch.get("nextNodeId");
 
-                        if (condition != null && evaluateBranchCondition(condition, context)) {
+                        boolean matched = condition != null && evaluateBranchCondition(condition, context);
+                        Map<String, Object> detail = buildConditionDetail(branchName, condition, matched, nextNodeId, context);
+                        branchDetails.add(detail);
+                        // 中文注释：输出可读条件表达式，便于在“过程”中直接看到 ${变量} > 1981723 这类判断。
+                        context.addLog("INFO", buildConditionProcessLine(detail), "CONDITION", node.getName(), null, null);
+                        if (matched) {
+                            evalSummary.put("matched", true);
+                            evalSummary.put("selectedBranch", branchName);
+                            evalSummary.put("selectedNextNodeId", nextNodeId);
+                            evalSummary.put("branches", branchDetails);
+                            context.addLog("INFO", "CONDITION 条件评估结果", "CONDITION", node.getName(), evalSummary, null);
                             log.info("CONDITION branch matched (OR logic): {}", branchName);
-                            context.addLog("Condition matched branch (OR logic): " + branchName);
                             return NodeResult.branch(Collections.singletonList(nextNodeId));
                         }
                     }
+                    evalSummary.put("matched", false);
+                    evalSummary.put("branches", branchDetails);
                 } else { // AND logic
                     boolean allMatched = true;
                     String firstNextNodeId = null;
+                    String firstBranchName = null;
                     
                     for (Map<String, Object> branch : branches) {
+                        String branchName = (String) branch.get("name");
                         Map<String, Object> condition = (Map<String, Object>) branch.get("condition");
                         if (firstNextNodeId == null) {
                             firstNextNodeId = (String) branch.get("nextNodeId");
+                            firstBranchName = branchName;
                         }
 
-                        if (condition == null || !evaluateBranchCondition(condition, context)) {
+                        boolean matched = condition != null && evaluateBranchCondition(condition, context);
+                        Map<String, Object> detail = buildConditionDetail(branchName, condition, matched, (String) branch.get("nextNodeId"), context);
+                        branchDetails.add(detail);
+                        // 中文注释：AND 模式下也逐条输出表达式，便于确认每个分支为何命中/未命中。
+                        context.addLog("INFO", buildConditionProcessLine(detail), "CONDITION", node.getName(), null, null);
+
+                        if (!matched) {
                             allMatched = false;
-                            break;
                         }
                     }
                     
                     if (allMatched && firstNextNodeId != null) {
+                        evalSummary.put("matched", true);
+                        evalSummary.put("selectedBranch", firstBranchName);
+                        evalSummary.put("selectedNextNodeId", firstNextNodeId);
+                        evalSummary.put("branches", branchDetails);
+                        context.addLog("INFO", "CONDITION 条件评估结果", "CONDITION", node.getName(), evalSummary, null);
                         log.info("CONDITION all branches matched (AND logic)");
-                        context.addLog("All conditions matched (AND logic)");
                         return NodeResult.branch(Collections.singletonList(firstNextNodeId));
                     }
+                    evalSummary.put("matched", false);
+                    evalSummary.put("branches", branchDetails);
                 }
+                context.addLog("INFO", "CONDITION 条件评估结果", "CONDITION", node.getName(), evalSummary, null);
             }
 
             if (defaultNextNodeId != null) {
                 log.info("CONDITION using default branch");
-                context.addLog("Condition using default branch");
+                Map<String, Object> fallback = new java.util.LinkedHashMap<>();
+                fallback.put("matched", false);
+                fallback.put("defaultNextNodeId", defaultNextNodeId);
+                context.addLog("INFO", "CONDITION 使用默认分支", "CONDITION", node.getName(), fallback, null);
                 return NodeResult.branch(Collections.singletonList(defaultNextNodeId));
             }
 
-            context.addLog("No condition matched and no default branch");
+            context.addLog("INFO", "CONDITION 无命中且无默认分支", "CONDITION", node.getName(), null, null);
             return NodeResult.ok();
         } catch (Exception e) {
             log.error("Error in CONDITION node: {}", node.getName(), e);
@@ -263,5 +295,61 @@ public class ConditionNodeHandler implements NodeHandler {
             return java.lang.reflect.Array.getLength(value) == 0;
         }
         return false;
+    }
+
+    private Map<String, Object> buildConditionDetail(String branchName,
+                                                     Map<String, Object> condition,
+                                                     boolean matched,
+                                                     String nextNodeId,
+                                                     FlowExecutionContext context) {
+        Map<String, Object> detail = new java.util.LinkedHashMap<>();
+        detail.put("branch", branchName);
+        detail.put("nextNodeId", nextNodeId);
+        detail.put("matched", matched);
+        if (condition != null) {
+            String leftPath = (String) condition.get("left");
+            String operator = (String) condition.get("operator");
+            Object rightValue = condition.get("right");
+            Object rightResolved = rightValue;
+            Object leftValue = VariablePathUtils.getValue(context.getVariables(), leftPath);
+            if (rightValue instanceof String rightStr && rightStr.startsWith("${") && rightStr.endsWith("}")) {
+                String rightPath = rightStr.substring(2, rightStr.length() - 1);
+                rightResolved = VariablePathUtils.getValue(context.getVariables(), rightPath);
+            }
+            detail.put("leftPath", leftPath);
+            detail.put("leftValue", leftValue);
+            detail.put("operator", operator);
+            detail.put("rightValue", rightValue);
+            detail.put("rightValueResolved", rightResolved);
+        }
+        return detail;
+    }
+
+    private String buildConditionProcessLine(Map<String, Object> detail) {
+        if (detail == null || !detail.containsKey("leftPath")) {
+            return "条件判断: 条件配置为空";
+        }
+        String leftPath = String.valueOf(detail.getOrDefault("leftPath", "-"));
+        String operator = String.valueOf(detail.getOrDefault("operator", "-"));
+        Object leftValue = detail.get("leftValue");
+        Object rightValue = detail.containsKey("rightValueResolved")
+                ? detail.get("rightValueResolved")
+                : detail.get("rightValue");
+        boolean matched = Boolean.TRUE.equals(detail.get("matched"));
+        String branchName = String.valueOf(detail.getOrDefault("branch", "-"));
+        return String.format("条件判断[%s]: ${%s} %s %s (当前=%s) => %s",
+                branchName,
+                leftPath,
+                operator,
+                stringify(rightValue),
+                stringify(leftValue),
+                matched ? "命中" : "未命中");
+    }
+
+    private String stringify(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        return String.valueOf(value);
     }
 }

@@ -361,6 +361,7 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 - 修复 `CONDITION` 分支编辑副作用：新增分支的占位项不再被自动过滤，点击/输入“分支名称”不会被隐藏。
 - `CONDITION` 节点移除“分支名称”输入项，新增操作符：包含、前缀匹配、后缀匹配、为空/不为空、数组长度比较（=/>/>=/</<=）。
 - `CONDITION` 节点操作符展示统一为中文标签；当选择数组长度比较时，判断变量字段会显示“应填写数组变量路径”的提示。
+- `CONDITION` 节点“判断变量”改为可输入下拉建议：自动提供“全局变量 + 上游节点输出变量”候选，且保留手动输入能力。
 
 **示例 — hex数据采集与转换：**
 ```json
@@ -548,16 +549,33 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 | timeout | 10000 | 超时毫秒数 |
 | outputVariable | httpResponse | 响应存入变量 |
 
-#### PLC_WRITE（PLC写入）
+#### PLC_READ（PLC 读取）
 
-通过Modbus TCP协议写入PLC寄存器。
+通过 Modbus TCP **读保持寄存器（FC 0x03）**。设计器左侧「设备与通信」可拖拽 **PLC 读取**。
 
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
-| host | - | PLC地址 |
-| port | 502 | Modbus端口 |
-| unitId | 1 | 从站ID |
-| registers[] | - | {address, valueSource} |
+| host | - | PLC IP（兼容旧字段 `ip`） |
+| port | 502 | Modbus 端口 |
+| unitId | 1 | 从站号（高级参数，可不配；前端表单默认不暴露，后端默认取 1） |
+| timeout | 5000 | 连接/读超时（ms） |
+| reads[] | - | 每段：`address` 起始地址，`quantity` 连续寄存器个数（1~125）；例如客户给 `D5502` 时填写 `5502` |
+| outputVariable | plcReadResult | 结果列表写入上下文变量 |
+
+结果：数组，元素为 `{ startAddress, quantity, values }`，`values` 为 16 位无符号整数列表（每字 2 字节）。
+
+#### PLC_WRITE（PLC 写入）
+
+通过 Modbus TCP 写寄存器（单字 **FC 0x06**，字符串多字按实现连续写）。设计器可拖拽 **PLC 写入**，支持 **registers 多路**。
+
+| 配置项 | 默认值 | 说明 |
+|---|---|---|
+| host | - | PLC IP（兼容 `ip`） |
+| port | 502 | Modbus 端口 |
+| unitId | 1 | 从站号（高级参数，可不配；前端表单默认不暴露，后端默认取 1） |
+| timeout | 5000 | 超时（ms） |
+| registers[] | - | 每项：`address`，`valueSource`（固定值或 `${var}`），可选 `writeAs`：`AUTO` / `INT` / `STRING_ASCII`；例如客户给 `D5502` 时填写 `5502` |
+| （兼容） | - | 旧配置可用单组 `address` + `writeValue` 代替一条 `registers` |
 
 ---
 
@@ -685,6 +703,17 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 
 ## 8. 前端设计器
 
+### 8.0 节点表单架构与规范（NodeForm）
+
+流程画布右侧节点配置对应 `web-app/src/pages/NodeForm.jsx` 与 `web-app/src/pages/node-form/`。节点类型增多时，**禁止**长期在单文件内无限堆叠 `switch`；应使用 **常量拆分、`normalizeNodeConfig` 规范化、`fieldRegistry` 注册表、`fields/` 按类型拆组件**。
+
+| 资源 | 说明 |
+|------|------|
+| **[node-form-extensibility.md](./node-form-extensibility.md)** | 目录约定、新增节点**完整检查清单**、props 约定、antd 约束、从 switch 迁移步骤、变更记录。 |
+| **`.cursor/rules/node-form.mdc`** | Cursor 规则：编辑 `NodeForm.jsx` / `node-form/**` 时提示 AI 遵守上述约定。 |
+
+**硬性约束（摘要）：** 设计器全屏路由未包裹 antd `<App>`，`NodeForm` 及相关 fields **不得**使用 `App.useApp()`，应使用静态 `message` 等 API；`node.config` 须安全展开；`Form.List` 数据源须为对象数组（详见独立文档 §5）。
+
 ### 8.1 节点分类
 
 | 分类 | 包含节点 |
@@ -693,7 +722,7 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 | 逻辑判断 | CONDITION, VARIABLE, DEDUP_FILTER |
 | 数据处理 | DATA_EXTRACT, DATA_FILTER, DATA_TRANSFORM, DATA_LOAD, SCRIPT, LOG |
 | 设备控制 | DEVICE_OPERATION |
-| 通信集成 | TCP_LISTEN, TCP_CLIENT, TCP_SERVER, SQL_QUERY, HTTP_REQUEST, PLC_WRITE |
+| 通信集成 | TCP_LISTEN, TCP_CLIENT, TCP_SERVER, SQL_QUERY, HTTP_REQUEST, PLC_READ, PLC_WRITE |
 
 ### 8.2 设计器操作
 
@@ -705,7 +734,14 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 - **调试日志：** 调试控制台使用内存实时日志会话（打开后创建会话并增量拉取），不从数据库读取；默认按节点摘要展示（每个节点一条，优先成功/失败/异常），并合并显示关键发送/接收信息；节点聚合优先按 `nodeId`，并兼容 `TCP_SEND/TCP_CLIENT` 别名去重，避免同一 TCP 发送节点出现多条摘要；日志主信息采用单行简约展示（执行时间、名称、类型、是否成功），其中“名称”为节点名称，“类型”为节点类型中文名（如设备数据、设备控制、TCP 客户端）；过程/输出/异常作为次级信息，且过程支持多行展示（每条过程单独一行），会自动去除“节点执行成功/失败/异常/警告”等状态词，避免与“状态”重复；TCP 类节点会额外显示发送变量与接收变量内容；`SYSTEM` 类型日志使用独立系统样式展示（不显示节点成功/失败状态），系统分隔日志（流程执行开始/结束分隔线）不再单独展示，避免与底部最终状态重复；异常信息默认折叠单行，支持“展开/收起”查看完整内容；支持“完整报文”开关切换截断/完整显示（并记住上次选择）；日志按时间正序展示（最新在最下方），并在运行期间自动滚动到最新；右侧变量状态在运行中也实时同步；"清空"仅清空当前界面显示，不影响数据库日志
 - **登录保持：** 系统启用 remember-me（30天），后端重启后在 cookie 未过期且未主动退出的情况下可自动恢复登录。`SecurityConfig` 中管理员账号改为固定盐值生成稳定 bcrypt 哈希，避免因每次重启重新 `encode` 导致 remember-me 签名校验失效。
 
-### 8.3 变量引用规则
+### 8.3 节点表单（NodeForm）注意事项
+
+- 完整架构、检查清单与迁移步骤见 **[node-form-extensibility.md](./node-form-extensibility.md)**；Cursor 侧见 **`.cursor/rules/node-form.mdc`**。
+- 设计器全屏路由 **未** 使用 antd 的 `<App>` 包裹，因此 `NodeForm` **不得**使用 `App.useApp()`，应使用静态 API（如 `import { message } from 'antd'`），否则运行时会抛错导致 **整页白屏**。
+- `node.config` 可能为 `null` 或非对象，表单初始化时需安全展开；`PLC_READ` / `PLC_WRITE` 的 `reads` / `registers` 需保证为对象数组，避免异常 JSON 导致 `Form.List` 崩溃。
+- **新增节点类型**：后端 `NodeHandler#getType()`、设计器 `nodeTypeMap`、侧栏拖拽类型须一致；表单字段名与 Handler 读取的 `config` 键一致；结构或约定变更须更新本文档或 `node-form-extensibility.md` 变更记录。
+
+### 8.4 变量引用规则
 
 在节点配置中使用 `${变量名}` 引用上下文变量：
 - 简单变量：`${myVar}`
@@ -749,3 +785,73 @@ ${parsedResult}       → 获取对象（自动JSON序列化）
 - 日志查询：`GET /api/flow-logs`
 - 设备数据：`GET /api/devices`
 - HTTP接收：`GET /api/test/http-receiver/history`
+
+---
+
+## 10. 变更记录（2026-03-23）
+
+### 10.1 调试日志统一入库
+
+- `FlowExecutor.execute(...)` 在流程执行结束后，新增统一落库逻辑：将 `FlowExecutionContext.executionLog` 全量写入 `flow_execution_log`。
+- 该改动后，调试会话里看到的关键过程日志可沉淀为历史记录，任务执行日志页面可直接读取与复用。
+
+### 10.2 任务执行日志按事件左右分栏展示
+
+- `LogViewer` 改为左右分栏：左侧为事件列表（每次执行一个事件），右侧展示所选事件的一次完整流程日志。
+- 数据来源为数据库 `flow_execution_log`，并以 `event_id` 聚合事件。
+- 历史无 `event_id` 的日志归入 `unknown` 分组，保证兼容旧数据。
+
+### 10.3 任务执行日志筛选能力
+
+- `LogViewer` 新增筛选项：日志级别、时间范围、关键词。
+- 筛选在前端内存数据上执行，不改变后端接口行为，可与“完整报文/简略报文”共存。
+- 级别支持：`ALL / ERROR / WARN / INFO / SUCCESS / SYSTEM`。
+
+### 10.4 节点执行日志降噪策略
+
+- 在 `FlowExecutor.executeNode(...)` 中将通用节点生命周期日志改为“结果型记录”：默认仅记录一次 `SUCCESS`，失败/异常记录 `ERROR`，空结果记录 `WARN`。
+- 移除通用的“节点执行开始 / 节点输入数据 / 节点输出后上下文 / 流程流转”日志，减少无效噪声。
+- 节点处理器内部的业务日志（如 TCP/DB 节点关键过程）仍可按需记录，便于定位具体问题。
+
+### 10.5 节点日志详细模式开关
+
+- 新增配置项：`logging.flow.verbose`（默认 `false`）。
+- `false`（默认）：精简模式，仅保留节点结果型日志（成功/失败/异常/警告）与必要业务日志。
+- `true`：详细模式，恢复通用过程日志（开始、输入、输出后上下文、流程流转、执行头尾元信息）。
+- 适用场景：日常运行建议精简模式；问题排查阶段可临时开启详细模式。
+
+### 10.6 PLC 字符串写寄存器支持
+
+- `PLC_WRITE` 节点新增每个寄存器项可选参数：`writeAs`，支持 `AUTO | INT | STRING_ASCII`。
+- `AUTO`（默认）规则：数值按单寄存器整数写入；非数字字符串按 ASCII 自动拆分为多个连续寄存器写入。
+- `STRING_ASCII`：强制字符串模式；`INT`：强制整数模式（兼容旧配置）。
+- 适用场景：箱码等字符串可直接写入 PLC 寄存器区；仅支持十进制/二进制数值的客户端可继续使用 `INT` 模式。
+
+### 10.7 节点日志统一优化（单节点单记录）
+
+- 流程日志入库改为“按节点聚合”：每个节点最终仅保留一条结果记录（成功/失败/异常/警告）。
+- 节点执行过程中的关键信息不再拆成多条记录，而是聚合到该节点记录的 `dataJson.processLines`。
+- `Condition` 节点补充条件评估明细：记录逻辑类型、各分支条件、左右值、命中结果与所选分支，便于复盘。
+- `Condition` 节点过程日志新增可读表达式行（如 `条件判断[分支A]: ${boxNo} > 1981723 (当前=1981800) => 命中`），便于快速定位条件命中原因。
+- 调试控制台摘要模式（`ExecutionLogPanel` 默认视图）会优先展示条件表达式行；当节点来自数据库聚合记录时，从 `dataJson.processLines` 中提取 `条件判断[...]` 行，避免“条件分支卡片仅显示摘要无过程”。
+- 调试控制台摘要模式对其它节点也统一保留非终态过程行（并过滤“节点执行开始/节点输入数据”等噪声），减少“节点卡片只有摘要、无过程”的情况。
+- **聚合键修正（重要）：** 落库聚合使用 `actionType（大写）| nodeName（trim）`。若流程 JSON 中节点 `type` 与 Handler 内硬编码类型大小写不一致（例如 `condition` vs `CONDITION`），原先会导致过程日志与「节点执行成功」落在不同键，`processLines` 为空，界面只显示摘要行；现已统一规范化避免该问题。
+
+### 10.8 全节点详情日志模板
+
+- 所有节点统一产出过程模板：`节点执行参数`、`节点流转目标`、`节点执行结果`（最终落在单条节点记录中）。
+- `FlowExecutionContext` 增加节点日志作用域，节点处理器中普通 `addLog(...)` 会自动归属到当前节点，统一并入该节点过程。
+- `LOG` 节点取消直接写库，改为统一走执行上下文聚合入库，避免一节点多条入库记录。
+
+### 10.9 前端节点表单（NodeForm）可扩展结构
+
+- 为支持大量节点类型，引入 `web-app/src/pages/node-form/`：`constants.js`、`normalizeNodeConfig.js`（`buildNodeFormInitialValues`）、`fieldRegistry.js`（`NODE_FIELD_COMPONENTS`）、**`fields/`** 下按类型拆分的表单项组件（如 `ScriptNodeFields.jsx`、`ConditionNodeFields.jsx`）；`NodeForm.jsx` 仅负责 Form 壳、自动保存与设备/数据源等副作用。
+- 约定与新增节点检查清单见 **[node-form-extensibility.md](./node-form-extensibility.md)**；AI/IDE 辅助规则见 **`.cursor/rules/node-form.mdc`**。
+- 设计器路由未包裹 antd `<App>`，表单内禁止使用 `App.useApp()`，须用静态 `message` 等 API（见第 8 节）。
+- **运行时坑位记录：** 某些打包链路会把属性中的字面量 `${...}` 误当模板字符串，出现 `ReferenceError: 变量 is not defined`。NodeForm/fields 中展示变量占位符时统一使用 `\u0024{var}`（例如 `{'支持 \u0024{var}'}`）或纯中文描述，避免在 JSX 属性字符串里直接写 `${中文标识符}`。
+
+### 10.10 调试控制台日志面板等价重构优化
+
+- 重构 `web-app/src/components/ExecutionLogPanel.jsx`：在不改变原有展示逻辑和数据处理规则的前提下，提取公共工具函数（动作类型规范化、过程行清洗、摘要过滤、颜色计算、日志键生成等），减少组件内重复代码与渲染期临时函数分配。
+- 节点日志聚合与展示行为保持不变：仍兼容 `TCP_SEND -> TCP_CLIENT` 别名、按 `nodeId/name` 聚合、保留条件节点表达式优先展示、系统日志分隔过滤、异常展开/收起等现有规则。
+- 新增并补齐关键中文注释，明确“摘要降噪、过程保留、TCP 细节行组装、自动滚动到底部”等核心设计意图，便于后续维护与扩展。
